@@ -26,7 +26,7 @@ class InMemoryStorage:
         # Ensure required fields have defaults
         card_data.setdefault('id', card_id)
         card_data.setdefault('name', 'Unknown Card')
-        card_data.setdefault('set_name', 'Unknown Set')
+        card_data.setdefault('set_name', 'Unknown')
         card_data.setdefault('rarity', 'Common')
         card_data.setdefault('condition', 'Near Mint')
         card_data.setdefault('price', 0.0)
@@ -104,34 +104,50 @@ class InMemoryStorage:
             'total_rows': 0
         }
         
+        if not csv_content.strip():
+            results['errors'].append("CSV file is empty or contains no data")
+            return results
+        
         try:
             csv_file = io.StringIO(csv_content)
             reader = csv.DictReader(csv_file)
             
+            rows_processed = 0
             for row_num, row in enumerate(reader, start=2):  # Start at 2 for header
+                rows_processed += 1
                 results['total_rows'] += 1
                 
                 try:
                     # Validate required fields
                     if not row.get('name', '').strip():
-                        results['errors'].append(f"Row {row_num}: Missing card name")
+                        results['errors'].append(f"row {row_num}: missing card name")
                         continue
                     
-                    # Convert price to float
+                    # Convert price to float with error handling
+                    price_str = row.get('price', '0')
                     try:
-                        price = float(row.get('price', 0))
+                        if price_str.strip():
+                            price = float(price_str)
+                        else:
+                            price = 0.0
                     except (ValueError, TypeError):
-                        price = 0.0
+                        results['errors'].append(f"row {row_num}: invalid price '{price_str}'")
+                        continue
                     
-                    # Convert quantity to int
+                    # Convert quantity to int with error handling
+                    quantity_str = row.get('quantity', '0')
                     try:
-                        quantity = int(row.get('quantity', 0))
+                        if quantity_str.strip():
+                            quantity = int(quantity_str)
+                        else:
+                            quantity = 0
                     except (ValueError, TypeError):
-                        quantity = 0
+                        results['errors'].append(f"row {row_num}: invalid quantity '{quantity_str}'")
+                        continue
                     
                     card_data = {
                         'name': row.get('name', '').strip(),
-                        'set_name': row.get('set_name', 'Unknown Set').strip(),
+                        'set_name': row.get('set_name', 'Unknown').strip(),
                         'rarity': row.get('rarity', 'Common').strip(),
                         'condition': row.get('condition', 'Near Mint').strip(),
                         'price': price,
@@ -143,8 +159,12 @@ class InMemoryStorage:
                     results['success'] += 1
                     
                 except Exception as e:
-                    results['errors'].append(f"Row {row_num}: {str(e)}")
+                    results['errors'].append(f"row {row_num}: {str(e)}")
                     logger.error(f"Error processing row {row_num}: {e}")
+            
+            # Check if we have no data rows (only headers)
+            if rows_processed == 0:
+                results['errors'].append("CSV file contains no data rows")
         
         except Exception as e:
             results['errors'].append(f"CSV parsing error: {str(e)}")

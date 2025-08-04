@@ -21,6 +21,10 @@ class User(UserMixin):
     def is_admin(self) -> bool:
         """Check if user has admin role"""
         return self.role == 'admin'
+    
+    def __str__(self) -> str:
+        """String representation of user"""
+        return f"User: {self.username} ({self.role})"
 
 
 class UserManager:

@@ -1,0 +1,36 @@
+💡 **Meta-task**
+Transform the current Flask storefront into a fully tested, 100 %-passing project.
+
+### 1 ▪ Scan & Inventory
+• Use `inspect.getmembers()` on each module in the `routes/`, `storage.py`, and any util files to collect every user-defined function and class method.  
+• Exclude dunder methods and anything imported from third-party libs.
+
+### 2 ▪ Generate Tests (pytest + coverage)
+• Scaffold `tests/` with pytest files mirroring the module hierarchy.  
+• For each discovered function:
+  – Write a happy-path test using realistic fixtures (e.g., Flask test-client for route handlers, sample `CARDS` dict for storage logic).  
+  – If the function has branch logic, add edge-case and failure-mode tests.  
+• Add `conftest.py` that provides a `app` and `client` fixture via `flask.testing.FlaskClient`.  
+• Integrate **coverage.py**: run with `pytest --cov=. --cov-report=term-missing`.
+
+### 3 ▪ Detect & Repair
+• After the first test run, parse pytest results; for each **ERROR** or **FAILED** case:  
+  – If failure is due to a **missing attribute/function**, generate the minimal implementation with type hints and a TODO comment.  
+  – If failure is due to **incorrect behaviour**, read the assertion diff and refactor the target function until the test passes.  
+  – Re-run only the affected tests (use `pytest -k <name>`). Iterate until green.  
+• Repeat until `pytest` exits with code 0 and coverage ≥ 90 %.
+
+### 4 ▪ CI Helper
+• Add a `watch_tests.sh` script that runs `pytest --verbose --maxfail=1` on every file-save (use `entr` on Replit).  
+• Document the workflow in `README.md`: how to run `pytest`, view coverage, and extend tests.
+
+### 5 ▪ Guardrails
+• Never modify third-party packages.  
+• Keep code Python 3.11-compatible and black-formatted.  
+• Preserve existing Flask routes and session logic; only refactor internals.  
+• Commit each green-test state with a message “green: <module>”.
+
+🚀 **Acceptance Criteria**
+1. `pytest -q` returns all dots.  
+2. `coverage html` shows ≥ 90 % lines covered.  
+3. Manual smoke-test: start Gunicorn (`poetry run gunicorn -b 0.0.0.0:3000 app:app`) and verify admin CRUD and user browsing still work.
