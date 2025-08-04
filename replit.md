@@ -7,6 +7,7 @@ TCG Card Shop is a Flask-based web application with secure role-based authentica
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
+Authentication: Removed register function and login management prompts - admin access only through direct login.
 
 ## System Architecture
 
@@ -55,7 +56,6 @@ Preferred communication style: Simple, everyday language.
 
 #### Authentication Routes  
 - `/login` - User login form
-- `/register` - User registration form
 - `/logout` - User logout (authenticated users only)
 
 #### Admin-Only Routes

@@ -197,37 +197,6 @@ def logout():
     flash(f'Goodbye, {username}!', 'info')
     return redirect(url_for('index'))
 
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    """User registration"""
-    if current_user.is_authenticated:
-        return redirect(url_for('index'))
-    
-    if request.method == 'POST':
-        username = request.form.get('username', '').strip()
-        password = request.form.get('password', '')
-        confirm_password = request.form.get('confirm_password', '')
-        
-        if not username or not password:
-            flash('Please enter username and password', 'error')
-            return render_template('register.html')
-        
-        if password != confirm_password:
-            flash('Passwords do not match', 'error')
-            return render_template('register.html')
-        
-        if len(password) < 6:
-            flash('Password must be at least 6 characters long', 'error')
-            return render_template('register.html')
-        
-        if user_manager.create_user(username, password):
-            flash('Registration successful! Please log in.', 'success')
-            return redirect(url_for('login'))
-        else:
-            flash('Username already exists', 'error')
-    
-    return render_template('register.html')
-
 @app.route('/admin')
 @admin_required
 def admin():
