@@ -1,18 +1,25 @@
 """
-User models and authentication classes for Flask-Login
+SQLAlchemy models for TCG Card Shop
 """
 import os
+from datetime import datetime
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-from typing import Dict, Optional
+from sqlalchemy import String, Integer, Numeric, DateTime, Text, func
+from sqlalchemy.orm import Mapped, mapped_column
+
+# Import db from app - will be available after app initialization
+from app import db
 
 
-class User(UserMixin):
-    def __init__(self, username: str, password_hash: str, role: str = 'user'):
-        self.id = username
-        self.username = username
-        self.password_hash = password_hash
-        self.role = role
+class User(UserMixin, db.Model):
+    __tablename__ = "users"
+    
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    username: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(256), nullable=False)
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default='user')
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     
     def check_password(self, password: str) -> bool:
         """Check if provided password matches hash"""
@@ -27,48 +34,60 @@ class User(UserMixin):
         return f"User: {self.username} ({self.role})"
 
 
-class UserManager:
-    def __init__(self):
-        self.users: Dict[str, User] = {}
-        self._initialize_admin_user()
+class Card(db.Model):
+    __tablename__ = "cards"
     
-    def _initialize_admin_user(self):
-        """Initialize admin user from environment variables"""
-        admin_username = os.environ.get('ADMIN_USERNAME', 'admin')
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    set_name: Mapped[str] = mapped_column(String(80), nullable=False, default='Unknown')
+    rarity: Mapped[str] = mapped_column(String(20), nullable=False, default='Common')
+    condition: Mapped[str] = mapped_column(String(20), nullable=False, default='Near Mint')
+    price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0.0)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    description: Mapped[str] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    
+    def to_dict(self):
+        """Convert card to dictionary for templates"""
+        return {
+            'id': str(self.id),
+            'name': self.name,
+            'set_name': self.set_name,
+            'rarity': self.rarity,
+            'condition': self.condition,
+            'price': float(self.price),
+            'quantity': self.quantity,
+            'description': self.description or '',
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None
+        }
+    
+    def __str__(self) -> str:
+        """String representation of card"""
+        return f"Card: {self.name} ({self.set_name}) - ${self.price}"
+
+
+def initialize_default_users():
+    """Initialize default admin and test users if they don't exist"""
+    # Check if admin user exists
+    admin = User.query.filter_by(username='admin').first()
+    if not admin:
         admin_password = os.environ.get('ADMIN_PASSWORD', 'admin123')
-        
-        # Create admin user
         admin_hash = generate_password_hash(admin_password)
-        self.users[admin_username] = User(admin_username, admin_hash, 'admin')
-        
-        # Add a default regular user for testing
+        admin = User(username='admin', password_hash=admin_hash, role='admin')
+        db.session.add(admin)
+    
+    # Check if test user exists
+    user = User.query.filter_by(username='user').first()
+    if not user:
         user_hash = generate_password_hash('user123')
-        self.users['user'] = User('user', user_hash, 'user')
+        user = User(username='user', password_hash=user_hash, role='user')
+        db.session.add(user)
     
-    def get_user(self, username: str) -> Optional[User]:
-        """Get user by username"""
-        return self.users.get(username)
-    
-    def create_user(self, username: str, password: str, role: str = 'user') -> bool:
-        """Create a new user"""
-        if username in self.users:
-            return False
-        
-        password_hash = generate_password_hash(password)
-        self.users[username] = User(username, password_hash, role)
-        return True
-    
-    def authenticate_user(self, username: str, password: str) -> Optional[User]:
-        """Authenticate user with username and password"""
-        user = self.get_user(username)
-        if user and user.check_password(password):
-            return user
-        return None
-    
-    def get_all_users(self) -> Dict[str, User]:
-        """Get all users (admin only)"""
-        return self.users.copy()
-
-
-# Global user manager instance
-user_manager = UserManager()
+    # Commit changes
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error initializing users: {e}")

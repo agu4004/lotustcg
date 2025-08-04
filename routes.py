@@ -1,8 +1,9 @@
 from flask import render_template, request, redirect, url_for, flash, session, jsonify
 from flask_login import login_user, logout_user, login_required, current_user
-from app import app
-from storage import storage
-from models import user_manager
+from werkzeug.security import check_password_hash
+from app import app, db
+from storage_db import storage
+from models import User
 from auth import admin_required, get_redirect_target
 import logging
 
@@ -175,8 +176,9 @@ def login():
             flash('Please enter both username and password', 'error')
             return render_template('login.html')
         
-        user = user_manager.authenticate_user(username, password)
-        if user:
+        # Authenticate user with database
+        user = User.query.filter_by(username=username).first()
+        if user and user.check_password(password):
             login_user(user, remember=remember)
             flash(f'Welcome back, {user.username}!', 'success')
             
@@ -202,7 +204,7 @@ def logout():
 def admin():
     """Admin panel - requires admin role"""
     cards = storage.get_all_cards()
-    users = user_manager.get_all_users()
+    users = User.query.all()
     return render_template('admin.html', cards=cards, users=users)
 
 @app.route('/admin/upload_csv', methods=['POST'])
@@ -276,7 +278,8 @@ def create_card():
 def update_card(card_id):
     """Update a card - admin only"""
     try:
-        card = storage.get_card(card_id)
+        from models import Card
+        card = Card.query.get(int(card_id))
         if not card:
             return jsonify({'error': 'Card not found'}), 404
         
@@ -286,11 +289,13 @@ def update_card(card_id):
         
         # Update card data
         for key, value in data.items():
-            if key != 'id':  # Don't allow ID changes
-                card[key] = value
+            if key != 'id' and hasattr(card, key):  # Don't allow ID changes
+                setattr(card, key, value)
         
-        return jsonify({'success': True, 'card': card}), 200
+        db.session.commit()
+        return jsonify({'success': True, 'card': card.to_dict()}), 200
     except Exception as e:
+        db.session.rollback()
         logger.error(f"Error updating card: {e}")
         return jsonify({'error': str(e)}), 500
 
@@ -299,18 +304,18 @@ def update_card(card_id):
 def delete_card(card_id):
     """Delete a card - admin only"""
     try:
-        card = storage.get_card(card_id)
+        from models import Card
+        card = Card.query.get(int(card_id))
         if not card:
             return jsonify({'error': 'Card not found'}), 404
         
-        # Remove card from storage
-        if card_id in storage.cards:
-            del storage.cards[card_id]
-            logger.debug(f"Deleted card: {card['name']} (ID: {card_id})")
-            return jsonify({'success': True, 'message': 'Card deleted'}), 200
-        else:
-            return jsonify({'error': 'Card not found'}), 404
+        # Remove card from database
+        db.session.delete(card)
+        db.session.commit()
+        logger.debug(f"Deleted card: {card.name} (ID: {card_id})")
+        return jsonify({'success': True, 'message': 'Card deleted'}), 200
     except Exception as e:
+        db.session.rollback()
         logger.error(f"Error deleting card: {e}")
         return jsonify({'error': str(e)}), 500
 

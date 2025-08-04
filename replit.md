@@ -32,10 +32,12 @@ Authentication: Removed register function and login management prompts - admin a
 - **Logging**: Python logging module with debug-level configuration
 
 ### Data Storage
-- **Storage Layer**: In-memory storage implementation (`storage.py`)
-- **Data Structure**: Dictionary-based card storage with auto-incrementing IDs
-- **Search Functionality**: Built-in filtering by name, set, rarity, and price range
-- **Data Import**: CSV upload functionality for bulk card management
+- **Storage Layer**: PostgreSQL database with SQLAlchemy ORM (`storage_db.py`)
+- **Database Models**: User and Card models with proper relationships and constraints
+- **Persistence**: Full CRUD operations with database transactions and rollback support
+- **Search Functionality**: Advanced SQL-based filtering by name, set, rarity, and price range
+- **Data Import**: CSV upload functionality with database bulk insert operations
+- **Migration Support**: Flask-Migrate for schema versioning and database updates
 
 ### Core Features
 - **Authentication System**: User registration, login/logout with Flask-Login
@@ -90,4 +92,4 @@ Authentication: Removed register function and login management prompts - admin a
 - **File Uploads**: Flask file handling for CSV uploads
 - **Sample Data**: Template generation for CSV format guidance
 
-Note: The application currently uses in-memory storage, making it suitable for development and demonstration purposes. For production deployment, integration with a persistent database solution would be recommended.
+**Production-Ready Database**: The application now uses PostgreSQL for persistent data storage, making it fully production-ready with data that survives restarts and scaling. Database operations are optimized with connection pooling and proper transaction management.

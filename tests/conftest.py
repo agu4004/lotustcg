@@ -13,7 +13,8 @@ sys.path.insert(0, '.')
 
 import app
 from storage import InMemoryStorage
-from models import UserManager
+from storage_db import DatabaseStorage
+from models import User
 
 
 @pytest.fixture
@@ -36,14 +37,14 @@ def client(app_instance):
 
 @pytest.fixture
 def storage():
-    """Create a fresh InMemoryStorage instance for testing"""
+    """Create a fresh InMemoryStorage instance for testing (legacy tests)"""
     return InMemoryStorage()
 
 
 @pytest.fixture
-def user_manager():
-    """Create a fresh UserManager instance for testing"""
-    return UserManager()
+def db_storage():
+    """Create a DatabaseStorage instance for database tests"""
+    return DatabaseStorage()
 
 
 @pytest.fixture
