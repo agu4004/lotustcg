@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}Home - TCG Card Shop{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="bg-dark text-light py-5">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-6">
+                <h1 class="display-4 fw-bold">Welcome to TCG Card Shop</h1>
+                <p class="lead">Discover rare and powerful cards for your trading card game collection. Browse our extensive catalog and find the perfect additions to your deck.</p>
+                <div class="d-flex gap-3">
+                    <a href="{{ url_for('catalog') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-search me-2"></i>Browse Catalog
+                    </a>
+                    <a href="{{ url_for('admin') }}" class="btn btn-outline-light btn-lg">
+                        <i class="fas fa-plus me-2"></i>Add Cards
+                    </a>
+                </div>
+            </div>
+            <div class="col-lg-6 text-center">
+                <i class="fas fa-magic display-1 text-primary"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Stats Section -->
+<div class="container my-5">
+    <div class="row text-center">
+        <div class="col-md-4">
+            <div class="card bg-primary text-light">
+                <div class="card-body">
+                    <i class="fas fa-clone display-4 mb-3"></i>
+                    <h3>{{ total_cards }}</h3>
+                    <p class="card-text">Cards Available</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-success text-light">
+                <div class="card-body">
+                    <i class="fas fa-search display-4 mb-3"></i>
+                    <h3>Advanced</h3>
+                    <p class="card-text">Search & Filters</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-info text-light">
+                <div class="card-body">
+                    <i class="fas fa-shopping-cart display-4 mb-3"></i>
+                    <h3>{{ cart_count }}</h3>
+                    <p class="card-text">Items in Cart</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Featured Cards Section -->
+{% if featured_cards %}
+<div class="container my-5">
+    <h2 class="text-center mb-4">Featured Cards</h2>
+    <div class="row">
+        {% for card in featured_cards %}
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <strong>{{ card.name }}</strong>
+                    <span class="badge bg-secondary">{{ card.rarity }}</span>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <i class="fas fa-image display-4 text-muted"></i>
+                        <p class="text-muted small mt-2">Card Image Placeholder</p>
+                    </div>
+                    <p><strong>Set:</strong> {{ card.set_name }}</p>
+                    <p><strong>Condition:</strong> {{ card.condition }}</p>
+                    <p><strong>Price:</strong> <span class="text-success fw-bold">${{ "%.2f"|format(card.price) }}</span></p>
+                    <p><strong>Available:</strong> {{ card.quantity }} copies</p>
+                    {% if card.description %}
+                    <p class="text-muted">{{ card.description }}</p>
+                    {% endif %}
+                </div>
+                <div class="card-footer">
+                    <div class="d-flex gap-2">
+                        <a href="{{ url_for('card_detail', card_id=card.id) }}" class="btn btn-outline-primary flex-fill">
+                            <i class="fas fa-eye me-1"></i>View Details
+                        </a>
+                        {% if card.quantity > 0 %}
+                        <form method="POST" action="{{ url_for('add_to_cart', card_id=card.id) }}" class="flex-fill">
+                            <input type="hidden" name="quantity" value="1">
+                            <button type="submit" class="btn btn-success w-100">
+                                <i class="fas fa-cart-plus me-1"></i>Add to Cart
+                            </button>
+                        </form>
+                        {% else %}
+                        <button class="btn btn-secondary flex-fill" disabled>
+                            <i class="fas fa-times me-1"></i>Out of Stock
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <div class="text-center">
+        <a href="{{ url_for('catalog') }}" class="btn btn-primary">
+            <i class="fas fa-th-large me-2"></i>View All Cards
+        </a>
+    </div>
+</div>
+{% else %}
+<div class="container my-5">
+    <div class="text-center">
+        <i class="fas fa-box-open display-1 text-muted mb-4"></i>
+        <h3>No Cards Available</h3>
+        <p class="text-muted">Start by adding some cards through the admin panel.</p>
+        <a href="{{ url_for('admin') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>Add Cards
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<!-- How It Works Section -->
+<div class="bg-dark text-light py-5">
+    <div class="container">
+        <h2 class="text-center mb-5">How It Works</h2>
+        <div class="row">
+            <div class="col-md-4 text-center mb-4">
+                <i class="fas fa-search display-4 text-primary mb-3"></i>
+                <h4>1. Browse & Search</h4>
+                <p>Use our advanced search and filters to find the exact cards you need for your collection.</p>
+            </div>
+            <div class="col-md-4 text-center mb-4">
+                <i class="fas fa-shopping-cart display-4 text-primary mb-3"></i>
+                <h4>2. Add to Cart</h4>
+                <p>Select the quantity and condition you want, then add cards to your shopping cart.</p>
+            </div>
+            <div class="col-md-4 text-center mb-4">
+                <i class="fas fa-credit-card display-4 text-primary mb-3"></i>
+                <h4>3. Manage Inventory</h4>
+                <p>Use the admin panel to upload cards via CSV and manage your card inventory efficiently.</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

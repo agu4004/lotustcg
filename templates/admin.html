@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Panel - TCG Card Shop{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row">
+        <div class="col-lg-8">
+            <h2><i class="fas fa-cog me-2"></i>Admin Panel</h2>
+            <p class="text-muted">Manage your card inventory and upload new cards via CSV.</p>
+            
+            <!-- CSV Upload Section -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-upload me-2"></i>Upload Cards via CSV</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('upload_csv') }}" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="csv_file" class="form-label">Choose CSV File</label>
+                            <input type="file" class="form-control" id="csv_file" name="csv_file" 
+                                   accept=".csv" required>
+                            <div class="form-text">
+                                Upload a CSV file with card data. Required columns: name, set_name, rarity, condition, price, quantity
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-upload me-2"></i>Upload Cards
+                            </button>
+                            <a href="{{ url_for('download_sample_csv') }}" class="btn btn-outline-info">
+                                <i class="fas fa-download me-2"></i>Download Sample CSV
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- CSV Format Help -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>CSV Format</h5>
+                </div>
+                <div class="card-body">
+                    <p>Your CSV file should contain the following columns:</p>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Column</th>
+                                    <th>Required</th>
+                                    <th>Description</th>
+                                    <th>Example</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code>name</code></td>
+                                    <td><span class="badge bg-danger">Yes</span></td>
+                                    <td>Card name</td>
+                                    <td>Lightning Bolt</td>
+                                </tr>
+                                <tr>
+                                    <td><code>set_name</code></td>
+                                    <td><span class="badge bg-warning">No</span></td>
+                                    <td>Set or expansion name</td>
+                                    <td>Core Set</td>
+                                </tr>
+                                <tr>
+                                    <td><code>rarity</code></td>
+                                    <td><span class="badge bg-warning">No</span></td>
+                                    <td>Card rarity</td>
+                                    <td>Common, Uncommon, Rare, Mythic Rare</td>
+                                </tr>
+                                <tr>
+                                    <td><code>condition</code></td>
+                                    <td><span class="badge bg-warning">No</span></td>
+                                    <td>Card condition</td>
+                                    <td>Near Mint, Light Play, Moderately Play</td>
+                                </tr>
+                                <tr>
+                                    <td><code>price</code></td>
+                                    <td><span class="badge bg-warning">No</span></td>
+                                    <td>Price in dollars</td>
+                                    <td>1.50</td>
+                                </tr>
+                                <tr>
+                                    <td><code>quantity</code></td>
+                                    <td><span class="badge bg-warning">No</span></td>
+                                    <td>Number of copies</td>
+                                    <td>10</td>
+                                </tr>
+                                <tr>
+                                    <td><code>description</code></td>
+                                    <td><span class="badge bg-warning">No</span></td>
+                                    <td>Card description</td>
+                                    <td>Classic red instant spell</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Current Inventory -->
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-boxes me-2"></i>Current Inventory</h5>
+                    {% if cards %}
+                    <form method="POST" action="{{ url_for('clear_cards') }}" class="d-inline">
+                        <button type="submit" class="btn btn-outline-danger btn-sm" 
+                                onclick="return confirm('Are you sure you want to delete ALL cards? This action cannot be undone.')">
+                            <i class="fas fa-trash me-1"></i>Clear All
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    {% if cards %}
+                    <p class="text-muted mb-3">{{ cards|length }} card(s) in inventory</p>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Set</th>
+                                    <th>Rarity</th>
+                                    <th>Condition</th>
+                                    <th>Price</th>
+                                    <th>Quantity</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for card in cards[:50] %}  <!-- Show first 50 cards -->
+                                <tr>
+                                    <td>
+                                        <strong>{{ card.name }}</strong>
+                                        {% if card.description %}
+                                        <br><small class="text-muted">{{ card.description[:100] }}{% if card.description|length > 100 %}...{% endif %}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ card.set_name }}</td>
+                                    <td><span class="badge bg-secondary">{{ card.rarity }}</span></td>
+                                    <td>{{ card.condition }}</td>
+                                    <td>${{ "%.2f"|format(card.price) }}</td>
+                                    <td>
+                                        {% if card.quantity > 0 %}
+                                            <span class="text-success">{{ card.quantity }}</span>
+                                        {% else %}
+                                            <span class="text-danger">0</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('card_detail', card_id=card.id) }}" 
+                                           class="btn btn-outline-primary btn-sm">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    {% if cards|length > 50 %}
+                    <div class="text-center">
+                        <p class="text-muted">Showing first 50 cards of {{ cards|length }} total</p>
+                        <a href="{{ url_for('catalog') }}" class="btn btn-outline-primary">
+                            <i class="fas fa-search me-2"></i>View All in Catalog
+                        </a>
+                    </div>
+                    {% endif %}
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-box-open display-4 text-muted mb-3"></i>
+                        <h5>No Cards in Inventory</h5>
+                        <p class="text-muted">Upload a CSV file to add cards to your inventory.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <!-- Quick Stats -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Quick Stats</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6 mb-3">
+                            <div class="border rounded p-3">
+                                <h3 class="text-primary mb-0">{{ cards|length }}</h3>
+                                <small class="text-muted">Total Cards</small>
+                            </div>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <div class="border rounded p-3">
+                                <h3 class="text-success mb-0">{{ cards|selectattr('quantity', 'greaterthan', 0)|list|length }}</h3>
+                                <small class="text-muted">In Stock</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-3">
+                                <h3 class="text-info mb-0">{{ cards|map(attribute='set_name')|unique|list|length }}</h3>
+                                <small class="text-muted">Unique Sets</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-3">
+                                <h3 class="text-warning mb-0">{{ cards|sum(attribute='quantity') }}</h3>
+                                <small class="text-muted">Total Copies</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-bolt me-2"></i>Quick Actions</h5>
+                </div>
+                <div class="card-body d-grid gap-2">
+                    <a href="{{ url_for('catalog') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-eye me-2"></i>View Catalog
+                    </a>
+                    <a href="{{ url_for('view_cart') }}" class="btn btn-outline-success">
+                        <i class="fas fa-shopping-cart me-2"></i>View Cart
+                        {% if cart_count > 0 %}
+                            <span class="badge bg-success ms-1">{{ cart_count }}</span>
+                        {% endif %}
+                    </a>
+                    <a href="{{ url_for('download_sample_csv') }}" class="btn btn-outline-info">
+                        <i class="fas fa-download me-2"></i>Sample CSV
+                    </a>
+                </div>
+            </div>
+            
+            <!-- Tips -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Tips</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                            Use the sample CSV to understand the format
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                            Only the "name" field is required
+                        </li>
+                        <li class="mb-2">
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                            Price should be in decimal format (e.g., 1.50)
+                        </li>
+                        <li class="mb-0">
+                            <i class="fas fa-check-circle text-success me-2"></i>
+                            Large files may take a moment to process
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // File upload validation
+    const fileInput = document.getElementById('csv_file');
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            const file = this.files[0];
+            if (file) {
+                if (!file.name.toLowerCase().endsWith('.csv')) {
+                    alert('Please select a CSV file.');
+                    this.value = '';
+                    return false;
+                }
+                
+                // Check file size (10MB limit)
+                if (file.size > 10 * 1024 * 1024) {
+                    alert('File size should be less than 10MB.');
+                    this.value = '';
+                    return false;
+                }
+            }
+        });
+    }
+    
+    // Form submit confirmation for large files
+    const uploadForm = document.querySelector('form[action*="upload_csv"]');
+    if (uploadForm) {
+        uploadForm.addEventListener('submit', function(e) {
+            const file = document.getElementById('csv_file').files[0];
+            if (file && file.size > 1024 * 1024) { // 1MB
+                if (!confirm('This file is quite large and may take a moment to process. Continue?')) {
+                    e.preventDefault();
+                    return false;
+                }
+            }
+            
+            // Show loading state
+            const submitBtn = this.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Uploading...';
+                submitBtn.disabled = true;
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
