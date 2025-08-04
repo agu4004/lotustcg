@@ -1,0 +1,68 @@
+💡 **Task**
+Migrate the existing Flask 3.11 storefront from in‑memory dictionaries to a persistent PostgreSQL database managed by Replit.
+
+### 1 ▪ Add the database
+
+• Use the Replit Database tool (PostgreSQL) and let Agent create the instance and store credentials in env vars (`DATABASE_URL`, `PGHOST`, `PGUSER`, `PGPASSWORD`).
+• Install and configure:
+– `psycopg2-binary` as the DB driver
+– `SQLAlchemy>=2.0` for ORM mapping
+– `Flask-SQLAlchemy` + `Flask-Migrate` for migrations.
+
+### 2 ▪ Define models
+
+• Convert the current `CARDS` dict into a SQLAlchemy model:
+
+```python
+class Card(db.Model):
+    __tablename__ = "cards"
+    id         = db.Column(db.Integer, primary_key=True)
+    name       = db.Column(db.String(120), nullable=False)
+    rarity     = db.Column(db.String(20), nullable=False)
+    price      = db.Column(db.Numeric(10, 2), nullable=False)
+    created_at = db.Column(db.DateTime, server_default=db.func.now())
+```
+
+• Generate the initial migration:
+
+```
+flask db init && flask db migrate -m "init tables" && flask db upgrade
+```
+
+### 3 ▪ Refactor routes & storage
+
+Replace all direct dictionary reads/writes with ORM queries:
+
+* `CARDS[id]`  → `Card.query.get(id)`
+* `CARDS.values()` → `Card.query.all()`
+* **Add / edit** → `db.session.add()` or field assignment + `db.session.commit()`
+* **Delete** → `db.session.delete()` + `db.session.commit()`
+
+### 4 ▪ Seed & CSV helpers
+
+• On first run, load any `seed/cards.csv` into the table with `COPY` or SQLAlchemy bulk‑insert.
+• Replace the previous CSV export/import util with database‑backed versions (`COPY TO/FROM STDOUT`).
+
+### 5 ▪ Update admin CRUD UI
+
+• Keep Jinja2 + Bootstrap templates, but fetch data via the new ORM‑powered routes.
+• Maintain role checks (`@admin_required`) so only admins see “Add / Edit / Delete” buttons.
+
+### 6 ▪ Testing & CI
+
+• Extend the existing pytest suite: add a `postgres` fixture that spins up a transactional test DB per test class and rolls back after each test.
+• Ensure `watch_tests.sh` still runs `pytest --cov=. --maxfail=1` and coverage ≥ 90 %.
+
+### 7 ▪ Deployment
+
+• Update Gunicorn command to set `--worker-class gthread` if needed for connection pooling.
+• Document in `README.md` how to:
+– View the DB in Replit’s SQL runner
+– Run migrations locally and in production
+– Restore the DB from the Replit “Restore” tab when required.
+
+🚀 **Acceptance Criteria**
+
+1. All CRUD operations persist across restarts.
+2. `pytest -q` passes; `coverage html` shows ≥ 90 % lines covered.
+3. The app deploys via Replit Deployments with no code changes beyond this prompt.
