@@ -1,0 +1,39 @@
+💡 Task
+Extend the existing Flask 3.11 storefront to add secure, role-based login so an **admin** can create / update / delete card records while regular **users** can only view them.
+
+🎯 Functional Specs
+1. **Auth layer**
+   • Integrate `Flask-Login` for session-based authentication.  
+   • Keep an in-memory `USERS` dict shaped like `{username: {'password_hash': ..., 'role': 'admin'|'user'}}`.  
+   • Hash passwords with `werkzeug.security.generate_password_hash`.  
+   • Store two Replit Secrets: `ADMIN_USERNAME`, `ADMIN_PASSWORD`.  
+2. **Roles & permissions**
+   • Implement `@admin_required` decorator that wraps `@login_required` and checks `current_user.role == "admin"`.  
+   • Public routes: `GET /`, `GET /cards`, `GET /cards/<id>`.  
+   • Admin-only routes: `POST /cards`, `PUT /cards/<id>`, `DELETE /cards/<id>`, `GET /admin`.  
+3. **Data layer**
+   • Keep the existing in-memory `CARDS` dict (`{id: {...}}`).  
+   • Add import/export helpers using Python’s built-in `csv` module for bulk management.  
+4. **UI**
+   • Render with Jinja2 templates that already use Bootstrap 5—add a dark-mode toggle via `data-bs-theme="dark"`.  
+   • Show “Add / Edit / Delete” buttons only when `current_user.role == "admin"`.  
+   • Include Font Awesome 6 icons for edit/trash.  
+5. **Cart sessions**
+   • Reuse `session['cart']` pattern for the existing cart; ensure cart survives login/logout.  
+6. **App structure**
+   • Follow your modular blueprint (`routes/`, `storage.py`, `config.py`).  
+   • Production entrypoint: `gunicorn -w 1 -b 0.0.0.0:3000 app:app`.  
+7. **README additions**
+   • How to set secrets in Replit, start the dev server (`flask run --reload`), and run the acceptance tests below.
+
+🚀 Acceptance Test
+1. Visit `/` as a guest → see cards, no admin buttons.  
+2. Register normal user → login → still no admin buttons; POST to `/cards` returns **403**.  
+3. Login with `ADMIN_USERNAME`/`ADMIN_PASSWORD` → `/admin` dashboard loads and CRUD routes return **200**.  
+4. Add a card, export CSV, wipe memory, re-import CSV → data restored.
+
+🔧 Technical Hints
+* `Flask-Login` handles session cookies and `current_user` context.  
+* Wrap CSV helpers around `csv.DictReader/DictWriter`.  
+* Use `flash()` + Bootstrap alerts for feedback messages.  
+* Guard in-memory dict with `threading.Lock` if you enable multiple Gunicorn workers later.

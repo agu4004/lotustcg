@@ -184,10 +184,58 @@
         </div>
         
         <div class="col-lg-4">
+            <!-- Admin Info -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-user-shield me-2"></i>Admin Dashboard</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-2"><strong>Logged in as:</strong> {{ current_user.username }}</p>
+                    <p class="mb-0"><strong>Role:</strong> 
+                        <span class="badge bg-warning">{{ current_user.role.title() }}</span>
+                    </p>
+                </div>
+            </div>
+
+            <!-- User Management -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-users me-2"></i>User Management</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="border rounded p-3">
+                                <h4 class="text-info mb-0">{{ users|length }}</h4>
+                                <small class="text-muted">Total Users</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="border rounded p-3">
+                                <h4 class="text-warning mb-0">{{ users.values()|selectattr('role', 'equalto', 'admin')|list|length }}</h4>
+                                <small class="text-muted">Admins</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <h6>Recent Users:</h6>
+                        {% for username, user in users.items() %}
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span>{{ username }}</span>
+                            <span class="badge bg-{{ 'warning' if user.role == 'admin' else 'secondary' }}">
+                                {{ user.role }}
+                            </span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
             <!-- Quick Stats -->
             <div class="card mb-4">
                 <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Quick Stats</h5>
+                    <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Inventory Stats</h5>
                 </div>
                 <div class="card-body">
                     <div class="row text-center">

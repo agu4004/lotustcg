@@ -1,6 +1,9 @@
 from flask import render_template, request, redirect, url_for, flash, session, jsonify
+from flask_login import login_user, logout_user, login_required, current_user
 from app import app
 from storage import storage
+from models import user_manager
+from auth import admin_required, get_redirect_target
 import logging
 
 logger = logging.getLogger(__name__)
@@ -25,14 +28,16 @@ def catalog():
     min_price = None
     max_price = None
     try:
-        if request.args.get('min_price'):
-            min_price = float(request.args.get('min_price'))
+        min_price_str = request.args.get('min_price')
+        if min_price_str:
+            min_price = float(min_price_str)
     except (ValueError, TypeError):
         pass
     
     try:
-        if request.args.get('max_price'):
-            max_price = float(request.args.get('max_price'))
+        max_price_str = request.args.get('max_price')
+        if max_price_str:
+            max_price = float(max_price_str)
     except (ValueError, TypeError):
         pass
     
@@ -154,15 +159,87 @@ def clear_cart():
     flash('Cart cleared', 'info')
     return redirect(url_for('view_cart'))
 
+# Authentication routes
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """User login"""
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        remember = bool(request.form.get('remember'))
+        
+        if not username or not password:
+            flash('Please enter both username and password', 'error')
+            return render_template('login.html')
+        
+        user = user_manager.authenticate_user(username, password)
+        if user:
+            login_user(user, remember=remember)
+            flash(f'Welcome back, {user.username}!', 'success')
+            
+            # Redirect to next page or home
+            next_page = get_redirect_target()
+            return redirect(next_page or url_for('index'))
+        else:
+            flash('Invalid username or password', 'error')
+    
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    """User logout"""
+    username = current_user.username
+    logout_user()
+    flash(f'Goodbye, {username}!', 'info')
+    return redirect(url_for('index'))
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    """User registration"""
+    if current_user.is_authenticated:
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+        
+        if not username or not password:
+            flash('Please enter username and password', 'error')
+            return render_template('register.html')
+        
+        if password != confirm_password:
+            flash('Passwords do not match', 'error')
+            return render_template('register.html')
+        
+        if len(password) < 6:
+            flash('Password must be at least 6 characters long', 'error')
+            return render_template('register.html')
+        
+        if user_manager.create_user(username, password):
+            flash('Registration successful! Please log in.', 'success')
+            return redirect(url_for('login'))
+        else:
+            flash('Username already exists', 'error')
+    
+    return render_template('register.html')
+
 @app.route('/admin')
+@admin_required
 def admin():
-    """Admin panel"""
+    """Admin panel - requires admin role"""
     cards = storage.get_all_cards()
-    return render_template('admin.html', cards=cards)
+    users = user_manager.get_all_users()
+    return render_template('admin.html', cards=cards, users=users)
 
 @app.route('/admin/upload_csv', methods=['POST'])
+@admin_required
 def upload_csv():
-    """Handle CSV upload"""
+    """Handle CSV upload - admin only"""
     if 'csv_file' not in request.files:
         flash('No file selected', 'error')
         return redirect(url_for('admin'))
@@ -172,7 +249,7 @@ def upload_csv():
         flash('No file selected', 'error')
         return redirect(url_for('admin'))
     
-    if not file.filename.endswith('.csv'):
+    if not file.filename or not file.filename.endswith('.csv'):
         flash('Please upload a CSV file', 'error')
         return redirect(url_for('admin'))
     
@@ -201,11 +278,72 @@ def upload_csv():
     return redirect(url_for('admin'))
 
 @app.route('/admin/clear_cards', methods=['POST'])
+@admin_required
 def clear_cards():
-    """Clear all cards"""
+    """Clear all cards - admin only"""
     storage.clear_all_cards()
     flash('All cards cleared', 'info')
     return redirect(url_for('admin'))
+
+# CRUD API endpoints for cards
+@app.route('/api/cards', methods=['POST'])
+@admin_required
+def create_card():
+    """Create a new card - admin only"""
+    try:
+        data = request.get_json()
+        if not data or not data.get('name'):
+            return jsonify({'error': 'Card name is required'}), 400
+        
+        card_id = storage.add_card(data)
+        card = storage.get_card(card_id)
+        return jsonify({'success': True, 'card': card, 'id': card_id}), 201
+    except Exception as e:
+        logger.error(f"Error creating card: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cards/<card_id>', methods=['PUT'])
+@admin_required
+def update_card(card_id):
+    """Update a card - admin only"""
+    try:
+        card = storage.get_card(card_id)
+        if not card:
+            return jsonify({'error': 'Card not found'}), 404
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+        
+        # Update card data
+        for key, value in data.items():
+            if key != 'id':  # Don't allow ID changes
+                card[key] = value
+        
+        return jsonify({'success': True, 'card': card}), 200
+    except Exception as e:
+        logger.error(f"Error updating card: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/cards/<card_id>', methods=['DELETE'])
+@admin_required
+def delete_card(card_id):
+    """Delete a card - admin only"""
+    try:
+        card = storage.get_card(card_id)
+        if not card:
+            return jsonify({'error': 'Card not found'}), 404
+        
+        # Remove card from storage
+        if card_id in storage.cards:
+            del storage.cards[card_id]
+            logger.debug(f"Deleted card: {card['name']} (ID: {card_id})")
+            return jsonify({'success': True, 'message': 'Card deleted'}), 200
+        else:
+            return jsonify({'error': 'Card not found'}), 404
+    except Exception as e:
+        logger.error(f"Error deleting card: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/admin/sample_csv')
 def download_sample_csv():
@@ -242,3 +380,11 @@ def cart_processor():
     cart = session.get('cart', {})
     cart_count = sum(cart.values()) if cart else 0
     return {'cart_count': cart_count}
+
+@app.context_processor
+def auth_processor():
+    """Add authentication info to all templates"""
+    return {
+        'current_user': current_user,
+        'is_admin': current_user.is_authenticated and current_user.is_admin() if hasattr(current_user, 'is_admin') else False
+    }

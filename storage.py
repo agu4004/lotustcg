@@ -46,7 +46,7 @@ class InMemoryStorage:
         return list(self.cards.values())
     
     def search_cards(self, query: str = "", set_filter: str = "", rarity_filter: str = "", 
-                    min_price: float = None, max_price: float = None) -> List[Dict[str, Any]]:
+                    min_price: Optional[float] = None, max_price: Optional[float] = None) -> List[Dict[str, Any]]:
         """Search cards with filters"""
         results = []
         
