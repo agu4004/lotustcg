@@ -1,13 +1,14 @@
-# TCG Card Shop
+# LotusTCG
 
 ## Overview
 
-TCG Card Shop is a Flask-based web application with secure role-based authentication for managing and browsing trading card game collections. The application provides a complete e-commerce experience with user authentication, card catalog browsing, search functionality, shopping cart management, and administrative tools for inventory management. Users can register accounts, login securely, search and filter cards by various criteria, add items to their cart, while administrators have exclusive access to card CRUD operations and CSV import/export functionality.
+LotusTCG is a Flask-based web application with secure role-based authentication for managing and browsing trading card game collections. The application provides a complete e-commerce experience with user authentication, card catalog browsing, search functionality, shopping cart management, and administrative tools for inventory management. Users can register accounts, login securely, search and filter cards by various criteria, add items to their cart, while administrators have exclusive access to card CRUD operations and CSV import/export functionality.
 
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.
 Authentication: Removed register function and login management prompts - admin access only through direct login.
+Project Name: Rebranded from "CardMarketScan" to "LotusTCG" for fresh deployment start.
 
 ## System Architecture
 

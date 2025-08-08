@@ -1,8 +1,8 @@
-# AWS Lightsail Deployment Guide - TCG Card Shop
+# AWS Lightsail Deployment Guide - CardMarketScan
 
 ## 🚀 Complete Deployment Tutorial
 
-This guide will walk you through deploying your Flask TCG Card Shop to AWS Lightsail with PostgreSQL database persistence.
+This guide will walk you through deploying your Flask CardMarketScan application to AWS Lightsail with PostgreSQL database persistence.
 
 ## 📋 Prerequisites
 
@@ -21,7 +21,7 @@ This guide will walk you through deploying your Flask TCG Card Shop to AWS Light
 # - Platform: Linux/Unix
 # - Blueprint: Ubuntu 22.04 LTS
 # - Instance Plan: $10/month (2GB RAM, 1 vCPU) - Recommended minimum
-# - Instance Name: tcg-card-shop
+# - Instance Name: cardmarketscan
 ```
 
 ### 1.2 Configure Networking
@@ -101,35 +101,49 @@ sudo systemctl status postgresql
 sudo -u postgres psql
 
 # In PostgreSQL prompt:
-CREATE DATABASE tcg_card_shop;
-CREATE USER tcguser WITH ENCRYPTED PASSWORD 'tcg_secure_password_2024';
-GRANT ALL PRIVILEGES ON DATABASE tcg_card_shop TO tcguser;
+CREATE DATABASE cardmarketscan;
+CREATE USER cmsuser WITH ENCRYPTED PASSWORD 'cms_secure_password_2024';
+GRANT ALL PRIVILEGES ON DATABASE cardmarketscan TO cmsuser;
 \q
 
 # Test database connection
-psql -h localhost -U tcguser -d tcg_card_shop
+psql -h localhost -U cmsuser -d cardmarketscan
 # Enter password when prompted, then type \q to exit
 ```
 
 ### 4.3 Configure PostgreSQL for Application Access
 ```bash
-# Edit PostgreSQL configuration
-sudo nano /etc/postgresql/14/main/postgresql.conf
+# First, find the correct PostgreSQL version and directory
+sudo find /etc/postgresql -name "postgresql.conf" 2>/dev/null
+# This will show the actual path, likely /etc/postgresql/15/main/ or /etc/postgresql/16/main/
 
-# Find and modify these lines:
+# Check PostgreSQL version
+sudo -u postgres psql -c "SELECT version();"
+
+# Use the correct path (replace XX with your version number):
+PGVERSION=$(sudo -u postgres psql -t -c "SELECT version();" | grep -oE '[0-9]+\.[0-9]+' | head -1 | cut -d. -f1)
+echo "PostgreSQL version: $PGVERSION"
+
+# Edit PostgreSQL configuration (using detected version)
+sudo nano /etc/postgresql/$PGVERSION/main/postgresql.conf
+
+# Find and modify these lines (uncomment if needed):
 listen_addresses = 'localhost'
 port = 5432
 
 # Save and exit (Ctrl+X, Y, Enter)
 
 # Edit authentication file
-sudo nano /etc/postgresql/14/main/pg_hba.conf
+sudo nano /etc/postgresql/$PGVERSION/main/pg_hba.conf
 
-# Add this line before other entries:
-local   tcg_card_shop   tcguser                 md5
+# Add this line BEFORE the existing local entries:
+local   cardmarketscan   cmsuser                 md5
 
 # Save and restart PostgreSQL
 sudo systemctl restart postgresql
+
+# Test the configuration
+sudo -u postgres psql -c "\l" | grep cardmarketscan
 ```
 
 ## 📁 Step 5: Deploy Application Code
@@ -137,8 +151,8 @@ sudo systemctl restart postgresql
 ### 5.1 Download Your Code from Replit
 ```bash
 # Create application directory
-mkdir -p /home/ubuntu/tcg-card-shop
-cd /home/ubuntu/tcg-card-shop
+mkdir -p /home/ubuntu/cardmarketscan
+cd /home/ubuntu/cardmarketscan
 
 # Option A: Download via Replit export
 # 1. In Replit, go to Files > Export as ZIP
@@ -167,15 +181,15 @@ nano requirements.txt
 ### 5.3 Create requirements.txt
 ```txt
 # Copy this content to requirements.txt:
-Flask==3.1.1
-Flask-Login==0.6.2
+Flask==3.0.3
+Flask-Login==0.6.3
 Flask-SQLAlchemy==3.1.1
 Flask-Migrate==4.0.5
 SQLAlchemy==2.0.23
-psycopg2-binary==2.9.7
-Werkzeug==3.1.3
-gunicorn==23.0.0
-email-validator==2.1.0
+psycopg2-binary==2.9.9
+Werkzeug==3.0.4
+gunicorn==21.2.0
+email-validator==2.1.1
 coverage==7.3.2
 pytest==7.4.3
 pytest-flask==1.3.0
@@ -204,7 +218,7 @@ mkdir -p templates static/css static/js
 ### 6.1 Create Virtual Environment and Install Dependencies
 ```bash
 # Create Python virtual environment
-cd /home/ubuntu/tcg-card-shop
+cd /home/ubuntu/cardmarketscan
 python -m venv venv
 
 # Activate virtual environment
@@ -224,19 +238,29 @@ python -c "import flask; print('Flask installed successfully')"
 nano .env
 
 # Add these environment variables:
-DATABASE_URL=postgresql://tcguser:tcg_secure_password_2024@localhost:5432/tcg_card_shop
+DATABASE_URL=postgresql://cmsuser:cms_secure_password_2024@localhost:5432/cardmarketscan
 SESSION_SECRET=your_super_secret_session_key_here_change_this
 FLASK_APP=main.py
 FLASK_ENV=production
 PGHOST=localhost
 PGPORT=5432
-PGUSER=tcguser
-PGPASSWORD=tcg_secure_password_2024
-PGDATABASE=tcg_card_shop
+PGUSER=cmsuser
+PGPASSWORD=cms_secure_password_2024
+PGDATABASE=cardmarketscan
 
-# Load environment variables (add to ~/.bashrc for persistence)
-echo 'export $(cat /home/ubuntu/tcg-card-shop/.env | xargs)' >> ~/.bashrc
+# Export environment variables for current session
+export DATABASE_URL=postgresql://cmsuser:cms_secure_password_2024@localhost:5432/cardmarketscan
+export SESSION_SECRET=your_super_secret_session_key_here_change_this
+export FLASK_APP=main.py
+export FLASK_ENV=production
+
+# Make permanent by adding to ~/.bashrc
+echo 'export DATABASE_URL=postgresql://cmsuser:cms_secure_password_2024@localhost:5432/cardmarketscan' >> ~/.bashrc
+echo 'export SESSION_SECRET=your_super_secret_session_key_here_change_this' >> ~/.bashrc
 source ~/.bashrc
+
+# Verify environment variables are set
+echo "DATABASE_URL: $DATABASE_URL"
 ```
 
 ## 🗄️ Step 7: Initialize Database
@@ -244,11 +268,20 @@ source ~/.bashrc
 ### 7.1 Set up Database Schema
 ```bash
 # Ensure you're in the app directory and venv is activated
-cd /home/ubuntu/tcg-card-shop
+cd /home/ubuntu/cardmarketscan
 source venv/bin/activate
+
+# Export environment variables (critical step)
+export DATABASE_URL=postgresql://tcguser:password@localhost:5432/tcg_card_shop
+export SESSION_SECRET=e7b1f4d9eb8900c435d7be5d5d9d8d5df40097cbaac28f65ca2052137f675dfa
+
+# Verify environment variable is set
+echo "DATABASE_URL: $DATABASE_URL"
 
 # Initialize database tables
 python -c "
+import os
+print('DATABASE_URL:', os.environ.get('DATABASE_URL'))
 from app import app, db
 with app.app_context():
     db.create_all()
@@ -281,7 +314,7 @@ with app.app_context():
 sudo apt install -y nginx
 
 # Create Nginx configuration
-sudo nano /etc/nginx/sites-available/tcg-card-shop
+sudo nano /etc/nginx/sites-available/cardmarketscan
 
 # Add this configuration:
 server {
@@ -297,13 +330,13 @@ server {
     }
 
     location /static {
-        alias /home/ubuntu/tcg-card-shop/static;
+        alias /home/ubuntu/cardmarketscan/static;
         expires 30d;
     }
 }
 
 # Enable the site
-sudo ln -s /etc/nginx/sites-available/tcg-card-shop /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/cardmarketscan /etc/nginx/sites-enabled/
 sudo rm /etc/nginx/sites-enabled/default
 
 # Test Nginx configuration
@@ -319,32 +352,33 @@ sudo systemctl enable nginx
 ### 9.1 Create Gunicorn Service
 ```bash
 # Create systemd service file
-sudo nano /etc/systemd/system/tcg-card-shop.service
+sudo nano /etc/systemd/system/cardmarketscan.service
 
-# Add this configuration:
+# Add this configuration (copy exactly):
 [Unit]
-Description=TCG Card Shop Gunicorn Application
+Description=CardMarketScan Gunicorn Application
 After=network.target
 
 [Service]
 User=ubuntu
 Group=ubuntu
-WorkingDirectory=/home/ubuntu/tcg-card-shop
-Environment="PATH=/home/ubuntu/tcg-card-shop/venv/bin"
-EnvironmentFile=/home/ubuntu/tcg-card-shop/.env
-ExecStart=/home/ubuntu/tcg-card-shop/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:5000 main:app
+WorkingDirectory=/home/ubuntu/cardmarketscan
+Environment=PATH=/home/ubuntu/cardmarketscan/venv/bin
+EnvironmentFile=/home/ubuntu/cardmarketscan/.env
+ExecStart=/home/ubuntu/cardmarketscan/venv/bin/gunicorn --workers 3 --bind 127.0.0.1:5000 main:app
 Restart=always
+RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
 
 # Reload systemd and start service
 sudo systemctl daemon-reload
-sudo systemctl start tcg-card-shop
-sudo systemctl enable tcg-card-shop
+sudo systemctl start cardmarketscan
+sudo systemctl enable cardmarketscan
 
 # Check service status
-sudo systemctl status tcg-card-shop
+sudo systemctl status cardmarketscan
 ```
 
 ### 9.2 Verify Deployment
@@ -356,7 +390,7 @@ curl http://localhost:5000
 curl http://YOUR_STATIC_IP
 
 # View application logs
-sudo journalctl -u tcg-card-shop -f
+sudo journalctl -u cardmarketscan -f
 ```
 
 ## 🔒 Step 10: Security and SSL Setup
@@ -414,7 +448,7 @@ ab -n 100 -c 10 http://YOUR_STATIC_IP/catalog
 ### 12.1 Log Management
 ```bash
 # View application logs
-sudo journalctl -u tcg-card-shop --since "1 hour ago"
+sudo journalctl -u cardmarketscan --since "1 hour ago"
 
 # View Nginx access logs
 sudo tail -f /var/log/nginx/access.log
@@ -430,7 +464,7 @@ nano ~/backup-db.sh
 
 #!/bin/bash
 backup_file="tcg_backup_$(date +%Y%m%d_%H%M%S).sql"
-pg_dump -h localhost -U tcguser tcg_card_shop > ~/backups/$backup_file
+pg_dump -h localhost -U cmsuser cardmarketscan > ~/backups/$backup_file
 echo "Database backed up to $backup_file"
 
 # Make executable and create backups directory
@@ -449,7 +483,7 @@ mkdir -p ~/backups
 sudo systemctl status postgresql
 
 # Check database credentials
-psql -h localhost -U tcguser -d tcg_card_shop
+psql -h localhost -U cmsuser -d cardmarketscan
 
 # Check environment variables
 echo $DATABASE_URL
@@ -458,10 +492,10 @@ echo $DATABASE_URL
 ### Issue 2: Gunicorn Won't Start
 ```bash
 # Check logs
-sudo journalctl -u tcg-card-shop -n 50
+sudo journalctl -u cardmarketscan -n 50
 
 # Test manually
-cd /home/ubuntu/tcg-card-shop
+cd /home/ubuntu/cardmarketscan
 source venv/bin/activate
 gunicorn --bind 127.0.0.1:5000 main:app
 ```
@@ -469,7 +503,7 @@ gunicorn --bind 127.0.0.1:5000 main:app
 ### Issue 3: Nginx 502 Bad Gateway
 ```bash
 # Check if Gunicorn is running
-sudo systemctl status tcg-card-shop
+sudo systemctl status cardmarketscan
 
 # Check Nginx configuration
 sudo nginx -t
@@ -481,10 +515,10 @@ sudo tail -f /var/log/nginx/error.log
 ### Issue 4: Static Files Not Loading
 ```bash
 # Check static files path
-ls -la /home/ubuntu/tcg-card-shop/static/
+ls -la /home/ubuntu/cardmarketscan/static/
 
 # Update Nginx static files location
-sudo nano /etc/nginx/sites-available/tcg-card-shop
+sudo nano /etc/nginx/sites-available/cardmarketscan
 ```
 
 ## 🌟 Final Verification Checklist
@@ -504,7 +538,7 @@ sudo nano /etc/nginx/sites-available/tcg-card-shop
 
 ## 🎉 Success!
 
-Your TCG Card Shop is now live on AWS Lightsail! Access it at:
+Your CardMarketScan is now live on AWS Lightsail! Access it at:
 - **HTTP**: http://YOUR_STATIC_IP
 - **HTTPS**: https://your-domain.com (if SSL configured)
 

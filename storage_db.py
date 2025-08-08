@@ -28,7 +28,8 @@ class DatabaseStorage:
                 condition=card_data.get('condition', 'Near Mint'),
                 price=float(card_data.get('price', 0.0)),
                 quantity=int(card_data.get('quantity', 0)),
-                description=card_data.get('description', '')
+                description=card_data.get('description', ''),
+                image_url=card_data.get('image_url', '')
             )
             
             db.session.add(card)

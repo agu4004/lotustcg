@@ -114,8 +114,18 @@
                         </div>
                         <div class="card-body">
                             <div class="text-center mb-3">
+                                {% if card.image_url %}
+                                <img src="{{ card.image_url }}" alt="{{ card.name }}" 
+                                     class="img-fluid rounded" style="height: 200px; width: auto; max-width: 100%; object-fit: contain;"
+                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                                <div style="display: none;">
+                                    <i class="fas fa-image display-4 text-muted"></i>
+                                    <p class="text-muted small mt-1">Image Not Available</p>
+                                </div>
+                                {% else %}
                                 <i class="fas fa-image display-4 text-muted"></i>
-                                <p class="text-muted small mt-1">Card Image</p>
+                                <p class="text-muted small mt-1">No Image</p>
+                                {% endif %}
                             </div>
                             <div class="small">
                                 <p class="mb-1"><strong>Set:</strong> {{ card.set_name }}</p>

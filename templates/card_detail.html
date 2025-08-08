@@ -16,10 +16,21 @@
         <div class="col-lg-6">
             <!-- Card Image -->
             <div class="card">
-                <div class="card-body text-center py-5">
+                <div class="card-body text-center py-4">
+                    {% if card.image_url %}
+                    <img src="{{ card.image_url }}" alt="{{ card.name }}" 
+                         class="img-fluid rounded shadow" style="max-height: 400px; width: auto; object-fit: contain;"
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                    <div style="display: none;">
+                        <i class="fas fa-image display-1 text-muted mb-3"></i>
+                        <h5 class="text-muted">Image Not Available</h5>
+                        <p class="text-muted">{{ card.name }}</p>
+                    </div>
+                    {% else %}
                     <i class="fas fa-image display-1 text-muted mb-3"></i>
-                    <h5 class="text-muted">Card Image Placeholder</h5>
+                    <h5 class="text-muted">No Image Available</h5>
                     <p class="text-muted">{{ card.name }}</p>
+                    {% endif %}
                 </div>
             </div>
         </div>
