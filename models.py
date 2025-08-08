@@ -45,6 +45,7 @@ class Card(db.Model):
     price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0.0)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     description: Mapped[str] = mapped_column(Text, nullable=True)
+    image_url: Mapped[str] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     
@@ -59,6 +60,7 @@ class Card(db.Model):
             'price': float(self.price),
             'quantity': self.quantity,
             'description': self.description or '',
+            'image_url': self.image_url or '',
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }

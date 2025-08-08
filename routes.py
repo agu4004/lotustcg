@@ -324,10 +324,10 @@ def download_sample_csv():
     """Download sample CSV template"""
     from flask import Response
     
-    sample_csv = """name,set_name,rarity,condition,price,quantity,description
-"Lightning Bolt","Core Set","Common","Near Mint",1.50,10,"Classic red instant spell"
-"Black Lotus","Alpha","Mythic Rare","Light Play",5000.00,1,"The most powerful mox"
-"Counterspell","Beta","Common","Near Mint",25.00,5,"Counter target spell"
+    sample_csv = """name,set_name,rarity,condition,price,quantity,description,image_url
+"Lightning Bolt","Core Set","Common","Near Mint",1.50,10,"Classic red instant spell","https://example.com/lightning-bolt.jpg"
+"Black Lotus","Alpha","Mythic Rare","Light Play",5000.00,1,"The most powerful mox","https://example.com/black-lotus.jpg"
+"Counterspell","Beta","Common","Near Mint",25.00,5,"Counter target spell","https://example.com/counterspell.jpg"
 """
     
     return Response(
@@ -362,3 +362,125 @@ def auth_processor():
         'current_user': current_user,
         'is_admin': current_user.is_authenticated and current_user.is_admin() if hasattr(current_user, 'is_admin') else False
     }
+
+# New admin routes for inline editing and deletion
+@app.route('/admin/edit_card/<card_id>', methods=['POST'])
+@admin_required
+def edit_card_form(card_id):
+    """Handle inline card editing - admin only"""
+    try:
+        from models import Card
+        card = Card.query.get(int(card_id))
+        if not card:
+            flash('Card not found', 'error')
+            return redirect(url_for('admin'))
+        
+        # Get form data
+        card.name = request.form.get('name', card.name)
+        card.set_name = request.form.get('set_name', card.set_name)
+        card.rarity = request.form.get('rarity', card.rarity)
+        card.condition = request.form.get('condition', card.condition)
+        card.description = request.form.get('description', card.description)
+        card.image_url = request.form.get('image_url', card.image_url)
+        
+        # Handle numeric fields with validation
+        try:
+            price = request.form.get('price')
+            if price:
+                card.price = float(price)
+        except (ValueError, TypeError):
+            flash('Invalid price format', 'error')
+            return redirect(url_for('admin'))
+        
+        try:
+            quantity = request.form.get('quantity')
+            if quantity:
+                card.quantity = int(quantity)
+        except (ValueError, TypeError):
+            flash('Invalid quantity format', 'error')
+            return redirect(url_for('admin'))
+        
+        db.session.commit()
+        flash(f'Card "{card.name}" updated successfully', 'success')
+        logger.debug(f"Updated card: {card.name} (ID: {card_id})")
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error updating card: {e}")
+        flash(f'Error updating card: {str(e)}', 'error')
+    
+    return redirect(url_for('admin'))
+
+@app.route('/admin/delete_card/<card_id>', methods=['POST'])
+@admin_required
+def delete_card_form(card_id):
+    """Handle card deletion - admin only"""
+    try:
+        from models import Card
+        card = Card.query.get(int(card_id))
+        if not card:
+            flash('Card not found', 'error')
+            return redirect(url_for('admin'))
+        
+        card_name = card.name
+        db.session.delete(card)
+        db.session.commit()
+        
+        flash(f'Card "{card_name}" deleted successfully', 'success')
+        logger.debug(f"Deleted card: {card_name} (ID: {card_id})")
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error deleting card: {e}")
+        flash(f'Error deleting card: {str(e)}', 'error')
+    
+    return redirect(url_for('admin'))
+
+@app.route('/admin/add_card', methods=['POST'])
+@admin_required
+def add_card_form():
+    """Handle manual card addition - admin only"""
+    try:
+        from models import Card
+        
+        # Validate required fields
+        name = request.form.get('name', '').strip()
+        if not name:
+            flash('Card name is required', 'error')
+            return redirect(url_for('admin'))
+        
+        # Create new card
+        card = Card(
+            name=name,
+            set_name=request.form.get('set_name', 'Unknown'),
+            rarity=request.form.get('rarity', 'Common'),
+            condition=request.form.get('condition', 'Near Mint'),
+            description=request.form.get('description', ''),
+            image_url=request.form.get('image_url', '')
+        )
+        
+        # Handle numeric fields with validation
+        try:
+            price = request.form.get('price', '0')
+            card.price = float(price) if price else 0.0
+        except (ValueError, TypeError):
+            card.price = 0.0
+        
+        try:
+            quantity = request.form.get('quantity', '0')
+            card.quantity = int(quantity) if quantity else 0
+        except (ValueError, TypeError):
+            card.quantity = 0
+        
+        db.session.add(card)
+        db.session.commit()
+        
+        flash(f'Card "{card.name}" added successfully', 'success')
+        logger.debug(f"Added card: {card.name} (ID: {card.id})")
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error adding card: {e}")
+        flash(f'Error adding card: {str(e)}', 'error')
+    
+    return redirect(url_for('admin'))
