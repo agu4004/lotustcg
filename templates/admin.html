@@ -305,7 +305,7 @@
                                         <div id="condition-display-{{ card.id }}">{{ card.condition }}</div>
                                     </td>
                                     <td>
-                                        <div id="price-display-{{ card.id }}">${{ "{:,}"|format(card.price) }}</div>
+                                        <div id="price-display-{{ card.id }}">${{ "{:,.0f}".format(card.price) }}</div>
                                     </td>
                                     <td>
                                         <div id="quantity-display-{{ card.id }}">

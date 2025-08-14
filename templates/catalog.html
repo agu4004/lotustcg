@@ -130,7 +130,7 @@
                             <div class="small">
                                 <p class="mb-1"><strong>Set:</strong> {{ card.set_name }}</p>
                                 <p class="mb-1"><strong>Condition:</strong> {{ card.condition }}</p>
-                                <p class="mb-1"><strong>Price:</strong> <span class="text-success fw-bold">{{ "{:,}"|format(card.price) }} VND</span></p>
+                                <p class="mb-1"><strong>Price:</strong> <span class="text-success fw-bold">{{ "{:,.0f}".format(card.price) }} VND</span></p>
                                 <p class="mb-2"><strong>Available:</strong> 
                                     {% if card.quantity > 0 %}
                                         <span class="text-success">{{ card.quantity }} copies</span>
