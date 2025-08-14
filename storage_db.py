@@ -187,7 +187,7 @@ class DatabaseStorage:
                     for k in _IMAGE_URL_KEYS:
                         if row.get(k):
                             image_url = row[k]
-                        break
+                            break
                     
                     # Create card data
                     card_data = {
