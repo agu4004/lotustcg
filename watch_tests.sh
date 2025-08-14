@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Simple test watcher script
-echo "🚀 Running Lotus TCG Test Suite"
+echo "🚀 Running The Lotus TCG Test Suite"
 echo "=================================="
 
 # Run core module tests separately to avoid Flask context issues

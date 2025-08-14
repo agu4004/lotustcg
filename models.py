@@ -1,5 +1,5 @@
 """
-SQLAlchemy models for Lotus TCG
+SQLAlchemy models for The Lotus TCG
 """
 import os
 from datetime import datetime

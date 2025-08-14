@@ -1,7 +1,7 @@
 #!/bin/bash
-# Quick start script for Lotus TCG
+# Quick start script for The Lotus TCG
 
-echo "🚀 Starting Lotus TCG..."
+echo "🚀 Starting The Lotus TCG..."
 
 # Activate virtual environment
 source venv/bin/activate

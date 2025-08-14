@@ -1,6 +1,6 @@
-Lotus TCG - Deployment Package
+The Lotus TCG - Deployment Package
 
-This package contains everything needed to deploy the Lotus TCG to AWS Lightsail.
+This package contains everything needed to deploy the The Lotus TCG to AWS Lightsail.
 
 WHAT'S INCLUDED:
 - Complete Flask application with PostgreSQL support
