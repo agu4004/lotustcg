@@ -7,9 +7,18 @@ import logging
 from typing import List, Optional, Dict, Any
 from sqlalchemy import or_, and_
 from app import db
+# storage_db.py (thêm ở đầu file)
+import re
+
+def _norm_header(s: str) -> str:
+    if s is None: return ""
+    s = s.replace("\ufeff", "")   # remove BOM nếu có
+    s = s.strip().lower()
+    return re.sub(r"\s+", "_", s) # "Image URL" -> "image_url"
 
 logger = logging.getLogger(__name__)
 
+_IMAGE_URL_KEYS = {"image_url", "image", "img_url", "imageurl", "thumbnail", "thumb_url"}
 
 class DatabaseStorage:
     """Database-backed storage for cards"""
@@ -173,7 +182,12 @@ class DatabaseStorage:
                         quantity = int(row.get('quantity', 0))
                     except (ValueError, TypeError):
                         results['errors'].append(f'Row {row_num}: invalid quantity "{row.get("quantity", "")}"')
-                        continue
+                        
+                    image_url = None
+                    for k in _IMAGE_URL_KEYS:
+                        if row.get(k):
+                            image_url = row[k]
+                        break
                     
                     # Create card data
                     card_data = {
@@ -183,7 +197,8 @@ class DatabaseStorage:
                         'condition': row.get('condition', 'Near Mint').strip(),
                         'price': price,
                         'quantity': quantity,
-                        'description': row.get('description', '').strip()
+                        'description': row.get('description', '').strip(),
+                        'image_url': image_url or ''
                     }
                     
                     # Add card to database
