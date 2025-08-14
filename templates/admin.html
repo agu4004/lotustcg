@@ -187,153 +187,154 @@
                     {% if cards %}
                     <p class="text-muted mb-3">{{ cards|length }} card(s) in inventory</p>
                     <div class="table-responsive">
-                        <table class="table table-hover">
-                        <!-- ...existing code... -->
-                        </table>
-                            <thead>
-                                <tr>
-                                    <th width="60">Image</th>
-                                    <th>Name</th>
-                                    <th>Set</th>
-                                    <th>Rarity</th>
-                                    <th>Condition</th>
-                                    <th>Price</th>
-                                    <th>Quantity</th>
-                                    <th width="120">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for card in cards[:50] %}  <!-- Show first 50 cards -->
-                                <tr id="card-row-{{ card.id }}">
-                                    <td>
-                                        <div id="image-display-{{ card.id }}">
-                                            {% if card.image_url %}
-                                            <img src="{{ card.image_url }}" alt="{{ card.name }}" 
-                                                 class="img-thumbnail" style="width: 50px; height: 70px; object-fit: cover;"
-                                                 onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAiIGhlaWdodD0iNzAiIHZpZXdCb3g9IjAgMCA1MCA3MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjUwIiBoZWlnaHQ9IjcwIiBmaWxsPSIjZjhmOWZhIi8+CjxwYXRoIGQ9Ik0yNSAzNWM1LjUyMyAwIDEwLTQuNDc3IDEwLTEwcy00LjQ3Ny0xMC0xMC0xMC0xMCA0LjQ3Ny0xMCAxMCA0LjQ3NyAxMCAxMCAxMHptMCAwdjE1bDE1LTEwLTE1LTV6IiBmaWxsPSIjZGVlMmU2Ii8+Cjwvc3ZnPgo=';">
-                                            {% else %}
-                                            <div class="bg-light border rounded d-flex align-items-center justify-content-center" 
-                                                 style="width: 50px; height: 70px; font-size: 12px; color: #6c757d;">
-                                                No Image
-                                            </div>
-                                            {% endif %}
-                                        </div>
-                                        <div id="image-edit-{{ card.id }}" style="display: none;">
-                                            <div class="text-center">
-                                                <small class="text-muted d-block">Image URL is in the edit form</small>
-                                                <i class="fas fa-arrow-right text-primary"></i>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div id="card-display-{{ card.id }}">
-                                            <strong>{{ card.name }}</strong>
-                                            {% if card.description %}
-                                            <br><small class="text-muted">{{ card.description[:100] }}{% if card.description|length > 100 %}...{% endif %}</small>
-                                            {% endif %}
-                                        </div>
-                                        <div id="card-edit-{{ card.id }}" style="display: none;">
-                                            <form id="edit-{{ card.id }}" method="POST" action="{{ url_for('edit_card_form', card_id=card.id) }}">
-                                                <div class="row g-2">
-                                                    <div class="col-12">
-                                                        <label class="form-label-sm text-muted fw-bold">Card Name</label>
-                                                        <input type="text" class="form-control form-control-sm" name="name" value="{{ card.name }}" required>
+                            <div style="max-height: 600px; overflow-y: auto;">
+                                <table class="table table-hover">
+                                    <thead>
+                                        <tr>
+                                            <th width="60">Image</th>
+                                            <th>Name</th>
+                                            <th>Set</th>
+                                            <th>Rarity</th>
+                                            <th>Condition</th>
+                                            <th>Price</th>
+                                            <th>Quantity</th>
+                                            <th width="120">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for card in cards[:50] %}  <!-- Show first 50 cards -->
+                                        <tr id="card-row-{{ card.id }}">
+                                            <td>
+                                                <div id="image-display-{{ card.id }}">
+                                                    {% if card.image_url %}
+                                                    <img src="{{ card.image_url }}" alt="{{ card.name }}" 
+                                                         class="img-thumbnail" style="width: 50px; height: 70px; object-fit: cover;"
+                                                         onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAiIGhlaWdodD0iNzAiIHZpZXdCb3g9IjAgMCA1MCA3MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjUwIiBoZWlnaHQ9IjcwIiBmaWxsPSIjZjhmOWZhIi8+CjxwYXRoIGQ9Ik0yNSAzNWM1LjUyMyAwIDEwLTQuNDc3IDEwLTEwcy00LjQ3Ny0xMC0xMC0xMC0xMCA0LjQ3Ny0xMCAxMCA0LjQ3NyAxMCAxMCAxMHptMCAwdjE1bDE1LTEwLTE1LTV6IiBmaWxsPSIjZGVlMmU2Ii8+Cjwvc3ZnPgo=';">
+                                                    {% else %}
+                                                    <div class="bg-light border rounded d-flex align-items-center justify-content-center" 
+                                                         style="width: 50px; height: 70px; font-size: 12px; color: #6c757d;">
+                                                        No Image
                                                     </div>
-                                                    <div class="col-6">
-                                                        <label class="form-label-sm text-muted fw-bold">Set</label>
-                                                        <input type="text" class="form-control form-control-sm" name="set_name" value="{{ card.set_name }}">
-                                                    </div>
-                                                    <div class="col-6">
-                                                        <label class="form-label-sm text-muted fw-bold">Rarity</label>
-                                                        <select class="form-select form-select-sm" name="rarity">
-                                                            <option value="Common" {% if card.rarity == 'Common' %}selected{% endif %}>Common</option>
-                                                            <option value="Uncommon" {% if card.rarity == 'Uncommon' %}selected{% endif %}>Uncommon</option>
-                                                            <option value="Rare" {% if card.rarity == 'Rare' %}selected{% endif %}>Rare</option>
-                                                            <option value="Mythic Rare" {% if card.rarity == 'Mythic Rare' %}selected{% endif %}>Mythic Rare</option>
-                                                        </select>
-                                                    </div>
-                                                    <div class="col-6">
-                                                        <label class="form-label-sm text-muted fw-bold">Condition</label>
-                                                        <select class="form-select form-select-sm" name="condition">
-                                                            <option value="Near Mint" {% if card.condition == 'Near Mint' %}selected{% endif %}>Near Mint</option>
-                                                            <option value="Light Play" {% if card.condition == 'Light Play' %}selected{% endif %}>Light Play</option>
-                                                            <option value="Moderately Play" {% if card.condition == 'Moderately Play' %}selected{% endif %}>Moderately Play</option>
-                                                            <option value="Heavy Play" {% if card.condition == 'Heavy Play' %}selected{% endif %}>Heavy Play</option>
-                                                            <option value="Damaged" {% if card.condition == 'Damaged' %}selected{% endif %}>Damaged</option>
-                                                        </select>
-                                                    </div>
-                                                    <div class="col-3">
-                                                        <label class="form-label-sm text-muted fw-bold">Price ($)</label>
-                                                        <input type="number" class="form-control form-control-sm" name="price" value="{{ card.price }}" step="0.01" min="0">
-                                                    </div>
-                                                    <div class="col-3">
-                                                        <label class="form-label-sm text-muted fw-bold">Quantity</label>
-                                                        <input type="number" class="form-control form-control-sm" name="quantity" value="{{ card.quantity }}" min="0">
-                                                    </div>
-                                                    <div class="col-12">
-                                                        <label class="form-label-sm text-muted fw-bold">🖼️ Image URL</label>
-                                                        <input type="url" class="form-control form-control-sm" name="image_url" value="{{ card.image_url }}" placeholder="https://example.com/card-image.jpg">
-                                                        <small class="text-info">
-                                                            <i class="fas fa-info-circle"></i> Paste a direct link to update the card image
-                                                        </small>
-                                                    </div>
-                                                    <div class="col-12">
-                                                        <label class="form-label-sm text-muted fw-bold">Description</label>
-                                                        <textarea class="form-control form-control-sm" name="description" rows="2" placeholder="Card description">{{ card.description }}</textarea>
-                                                    </div>
-                                                    <div class="col-12">
-                                                        <div class="d-flex gap-2 justify-content-end">
-                                                            <button type="button" class="btn btn-secondary btn-sm" onclick="toggleEdit('{{ card.id }}')">
-                                                                <i class="fas fa-times"></i> Cancel
-                                                            </button>
-                                                            <button type="submit" class="btn btn-success btn-sm">
-                                                                <i class="fas fa-save"></i> Save All Changes
-                                                            </button>
-                                                        </div>
+                                                    {% endif %}
+                                                </div>
+                                                <div id="image-edit-{{ card.id }}" style="display: none;">
+                                                    <div class="text-center">
+                                                        <small class="text-muted d-block">Image URL is in the edit form</small>
+                                                        <i class="fas fa-arrow-right text-primary"></i>
                                                     </div>
                                                 </div>
-                                            </form>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div id="set-display-{{ card.id }}">{{ card.set_name }}</div>
-                                    </td>
-                                    <td>
-                                        <div id="rarity-display-{{ card.id }}">
-                                            <span class="badge bg-secondary">{{ card.rarity }}</span>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div id="condition-display-{{ card.id }}">{{ card.condition }}</div>
-                                    </td>
-                                    <td>
-                                        <div id="price-display-{{ card.id }}">${{ "{:,.0f}".format(card.price) }}</div>
-                                    </td>
-                                    <td>
-                                        <div id="quantity-display-{{ card.id }}">
-                                            {% if card.quantity > 0 %}
-                                                <span class="text-success">{{ card.quantity }}</span>
-                                            {% else %}
-                                                <span class="text-danger">0</span>
-                                            {% endif %}
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div class="btn-group" role="group">
-                                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="toggleEdit('{{ card.id }}')" title="Edit">
-                                                <i class="fas fa-edit"></i>
-                                            </button>
-                                            <form method="POST" action="{{ url_for('delete_card_form', card_id=card.id) }}" class="d-inline">
-                                                <button type="submit" class="btn btn-outline-danger btn-sm" 
-                                                        onclick="return confirm('Are you sure you want to delete {{ card.name }}?')" title="Delete">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </form>
-                                        </div>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
+                                            </td>
+                                            <td>
+                                                <div id="card-display-{{ card.id }}">
+                                                    <strong>{{ card.name }}</strong>
+                                                    {% if card.description %}
+                                                    <br><small class="text-muted">{{ card.description[:100] }}{% if card.description|length > 100 %}...{% endif %}</small>
+                                                    {% endif %}
+                                                </div>
+                                                <div id="card-edit-{{ card.id }}" style="display: none;">
+                                                    <form id="edit-{{ card.id }}" method="POST" action="{{ url_for('edit_card_form', card_id=card.id) }}">
+                                                        <div class="row g-2">
+                                                            <div class="col-12">
+                                                                <label class="form-label-sm text-muted fw-bold">Card Name</label>
+                                                                <input type="text" class="form-control form-control-sm" name="name" value="{{ card.name }}" required>
+                                                            </div>
+                                                            <div class="col-6">
+                                                                <label class="form-label-sm text-muted fw-bold">Set</label>
+                                                                <input type="text" class="form-control form-control-sm" name="set_name" value="{{ card.set_name }}">
+                                                            </div>
+                                                            <div class="col-6">
+                                                                <label class="form-label-sm text-muted fw-bold">Rarity</label>
+                                                                <select class="form-select form-select-sm" name="rarity">
+                                                                    <option value="Common" {% if card.rarity == 'Common' %}selected{% endif %}>Common</option>
+                                                                    <option value="Uncommon" {% if card.rarity == 'Uncommon' %}selected{% endif %}>Uncommon</option>
+                                                                    <option value="Rare" {% if card.rarity == 'Rare' %}selected{% endif %}>Rare</option>
+                                                                    <option value="Mythic Rare" {% if card.rarity == 'Mythic Rare' %}selected{% endif %}>Mythic Rare</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-6">
+                                                                <label class="form-label-sm text-muted fw-bold">Condition</label>
+                                                                <select class="form-select form-select-sm" name="condition">
+                                                                    <option value="Near Mint" {% if card.condition == 'Near Mint' %}selected{% endif %}>Near Mint</option>
+                                                                    <option value="Light Play" {% if card.condition == 'Light Play' %}selected{% endif %}>Light Play</option>
+                                                                    <option value="Moderately Play" {% if card.condition == 'Moderately Play' %}selected{% endif %}>Moderately Play</option>
+                                                                    <option value="Heavy Play" {% if card.condition == 'Heavy Play' %}selected{% endif %}>Heavy Play</option>
+                                                                    <option value="Damaged" {% if card.condition == 'Damaged' %}selected{% endif %}>Damaged</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-3">
+                                                                <label class="form-label-sm text-muted fw-bold">Price ($)</label>
+                                                                <input type="number" class="form-control form-control-sm" name="price" value="{{ card.price }}" step="0.01" min="0">
+                                                            </div>
+                                                            <div class="col-3">
+                                                                <label class="form-label-sm text-muted fw-bold">Quantity</label>
+                                                                <input type="number" class="form-control form-control-sm" name="quantity" value="{{ card.quantity }}" min="0">
+                                                            </div>
+                                                            <div class="col-12">
+                                                                <label class="form-label-sm text-muted fw-bold">🖼️ Image URL</label>
+                                                                <input type="url" class="form-control form-control-sm" name="image_url" value="{{ card.image_url }}" placeholder="https://example.com/card-image.jpg">
+                                                                <small class="text-info">
+                                                                    <i class="fas fa-info-circle"></i> Paste a direct link to update the card image
+                                                                </small>
+                                                            </div>
+                                                            <div class="col-12">
+                                                                <label class="form-label-sm text-muted fw-bold">Description</label>
+                                                                <textarea class="form-control form-control-sm" name="description" rows="2" placeholder="Card description">{{ card.description }}</textarea>
+                                                            </div>
+                                                            <div class="col-12">
+                                                                <div class="d-flex gap-2 justify-content-end">
+                                                                    <button type="button" class="btn btn-secondary btn-sm" onclick="toggleEdit('{{ card.id }}')">
+                                                                        <i class="fas fa-times"></i> Cancel
+                                                                    </button>
+                                                                    <button type="submit" class="btn btn-success btn-sm">
+                                                                        <i class="fas fa-save"></i> Save All Changes
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div id="set-display-{{ card.id }}">{{ card.set_name }}</div>
+                                            </td>
+                                            <td>
+                                                <div id="rarity-display-{{ card.id }}">
+                                                    <span class="badge bg-secondary">{{ card.rarity }}</span>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div id="condition-display-{{ card.id }}">{{ card.condition }}</div>
+                                            </td>
+                                            <td>
+                                                <div id="price-display-{{ card.id }}">${{ "{:,.0f}".format(card.price) }}</div>
+                                            </td>
+                                            <td>
+                                                <div id="quantity-display-{{ card.id }}">
+                                                    {% if card.quantity > 0 %}
+                                                        <span class="text-success">{{ card.quantity }}</span>
+                                                    {% else %}
+                                                        <span class="text-danger">0</span>
+                                                    {% endif %}
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="btn-group" role="group">
+                                                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="toggleEdit('{{ card.id }}')" title="Edit">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <form method="POST" action="{{ url_for('delete_card_form', card_id=card.id) }}" class="d-inline">
+                                                        <button type="submit" class="btn btn-outline-danger btn-sm" 
+                                                                onclick="return confirm('Are you sure you want to delete {{ card.name }}?')" title="Delete">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
                         </table>
                     </div>
                     
