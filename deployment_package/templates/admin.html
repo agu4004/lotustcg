@@ -144,7 +144,7 @@
                                     <td>{{ card.set_name }}</td>
                                     <td><span class="badge bg-secondary">{{ card.rarity }}</span></td>
                                     <td>{{ card.condition }}</td>
-                                    <td>{{ "%.2f"|format(card.price) }} VND</td>
+                                    <td>{{ "{:,}"|format(card.price) }} VND</td>
                                     <td>
                                         {% if card.quantity > 0 %}
                                             <span class="text-success">{{ card.quantity }}</span>
