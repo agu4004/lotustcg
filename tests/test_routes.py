@@ -19,7 +19,7 @@ class TestPublicRoutes:
             
             assert response.status_code == 200
             assert b'No Cards Available' in response.data
-            assert b'TCG Card Shop' in response.data
+            assert b'Lotus TCG' in response.data
     
     def test_index_route_with_cards(self, client, sample_cards_list):
         """Test index route with cards in storage"""

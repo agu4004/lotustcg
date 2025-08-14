@@ -124,7 +124,7 @@ def verify_users():
 
 if __name__ == '__main__':
     with app.app_context():
-        print("🌱 Seeding TCG Card Shop Database...")
+        print("🌱 Seeding Lotus TCG Database...")
         print("=" * 40)
         
         # Verify users

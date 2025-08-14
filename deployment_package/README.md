@@ -1,4 +1,4 @@
-# TCG Card Shop with Authentication
+# Lotus TCG with Authentication
 
 A Flask-based trading card game storefront with secure role-based authentication, featuring admin controls for inventory management and user access to browse and purchase cards.
 

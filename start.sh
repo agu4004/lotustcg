@@ -1,7 +1,7 @@
 #!/bin/bash
-# Quick start script for TCG Card Shop
+# Quick start script for Lotus TCG
 
-echo "🚀 Starting TCG Card Shop..."
+echo "🚀 Starting Lotus TCG..."
 
 # Activate virtual environment
 source venv/bin/activate

@@ -1,5 +1,5 @@
 """
-Pytest configuration and fixtures for TCG Card Shop tests
+Pytest configuration and fixtures for Lotus TCG tests
 """
 
 import pytest

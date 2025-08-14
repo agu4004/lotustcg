@@ -243,7 +243,7 @@ gunicorn --bind 0.0.0.0:5000 --reuse-port --reload main:app
 **Application Status**: ✅ PRODUCTION READY  
 **Data Persistence**: ✅ ACTIVE  
 
-The TCG Card Shop has been successfully migrated from in-memory storage to a robust PostgreSQL database backend. The application is now production-ready with full data persistence, transaction integrity, and scalability support.
+The Lotus TCG has been successfully migrated from in-memory storage to a robust PostgreSQL database backend. The application is now production-ready with full data persistence, transaction integrity, and scalability support.
 
 ---
 *Migration completed on: 2025-08-04*  
