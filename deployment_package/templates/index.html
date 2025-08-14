@@ -84,7 +84,7 @@
                     </div>
                     <p><strong>Set:</strong> {{ card.set_name }}</p>
                     <p><strong>Condition:</strong> {{ card.condition }}</p>
-                    <p><strong>Price:</strong> <span class="text-success fw-bold">${{ "%.2f"|format(card.price) }}</span></p>
+                    <p><strong>Price:</strong> <span class="text-success fw-bold">{{ "%.2f"|format(card.price) }} VND</span></p>
                     <p><strong>Available:</strong> {{ card.quantity }} copies</p>
                     {% if card.description %}
                     <p class="text-muted">{{ card.description }}</p>
