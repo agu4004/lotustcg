@@ -1,9 +1,0 @@
-Flask==3.0.3
-Flask-Login==0.6.3
-Flask-SQLAlchemy==3.1.1
-Flask-Migrate==4.0.5
-SQLAlchemy==2.0.23
-psycopg2-binary==2.9.9
-Werkzeug==3.0.4
-gunicorn==21.2.0
-email-validator==2.1.1
