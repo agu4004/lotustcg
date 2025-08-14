@@ -39,7 +39,7 @@
                             </small>
                         </div>
                         <div class="col-md-2 text-center">
-                            <p class="mb-0"><strong>${{ "%.2f"|format(item.card.price) }}</strong></p>
+                            <p class="mb-0"><strong>{{ "%.2f"|format(item.card.price) }} VND</strong></p>
                             <small class="text-muted">per card</small>
                         </div>
                         <div class="col-md-2">
@@ -58,7 +58,7 @@
                             </form>
                         </div>
                         <div class="col-md-2 text-center">
-                            <p class="mb-0"><strong class="text-success">${{ "%.2f"|format(item.item_total) }}</strong></p>
+                            <p class="mb-0"><strong class="text-success">{{ "%.2f"|format(item.item_total) }} VND</strong></p>
                             <small class="text-muted">total</small>
                         </div>
                     </div>
@@ -95,7 +95,7 @@
                     
                     <div class="d-flex justify-content-between mb-3">
                         <strong>Total:</strong>
-                        <strong class="text-success">${{ "%.2f"|format(total_price) }}</strong>
+                        <strong class="text-success">{{ "%.2f"|format(total_price) }} VND</strong>
                     </div>
                     
                     <div class="d-grid gap-2">

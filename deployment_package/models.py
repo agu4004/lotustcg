@@ -65,7 +65,7 @@ class Card(db.Model):
     
     def __str__(self) -> str:
         """String representation of card"""
-        return f"Card: {self.name} ({self.set_name}) - ${self.price}"
+        return f"Card: {self.name} ({self.set_name}) - {self.price} VND"
 
 
 def initialize_default_users():

@@ -90,8 +90,8 @@
             {% if current_filters.q %}{% set _ = active_filters.append(('Search', current_filters.q)) %}{% endif %}
             {% if current_filters.set %}{% set _ = active_filters.append(('Set', current_filters.set)) %}{% endif %}
             {% if current_filters.rarity %}{% set _ = active_filters.append(('Rarity', current_filters.rarity)) %}{% endif %}
-            {% if current_filters.min_price %}{% set _ = active_filters.append(('Min Price', '$' + current_filters.min_price)) %}{% endif %}
-            {% if current_filters.max_price %}{% set _ = active_filters.append(('Max Price', '$' + current_filters.max_price)) %}{% endif %}
+            {% if current_filters.min_price %}{% set _ = active_filters.append(('Min Price', 'VND' + current_filters.min_price)) %}{% endif %}
+            {% if current_filters.max_price %}{% set _ = active_filters.append(('Max Price', 'VND' + current_filters.max_price)) %}{% endif %}
             
             {% if active_filters %}
             <div class="mb-3">
@@ -130,7 +130,7 @@
                             <div class="small">
                                 <p class="mb-1"><strong>Set:</strong> {{ card.set_name }}</p>
                                 <p class="mb-1"><strong>Condition:</strong> {{ card.condition }}</p>
-                                <p class="mb-1"><strong>Price:</strong> <span class="text-success fw-bold">${{ "%.2f"|format(card.price) }}</span></p>
+                                <p class="mb-1"><strong>Price:</strong> <span class="text-success fw-bold">{{ "%.2f"|format(card.price) }} VND</span></p>
                                 <p class="mb-2"><strong>Available:</strong> 
                                     {% if card.quantity > 0 %}
                                         <span class="text-success">{{ card.quantity }} copies</span>

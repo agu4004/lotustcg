@@ -96,7 +96,7 @@ def seed_cards():
         card = Card(**card_data)
         db.session.add(card)
         cards_added += 1
-        print(f"Added: {card_data['name']} - ${card_data['price']}")
+        print(f"Added: {card_data['name']} - {card_data['price']} VND")
     
     try:
         db.session.commit()
