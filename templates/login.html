@@ -37,62 +37,8 @@
                         </div>
                     </form>
                 </div>
-                <div class="card-footer text-center">
-                    <p class="mb-0 text-muted">Use the demo credentials below to access the system</p>
-                </div>
-            </div>
-            
-            <!-- Demo Credentials -->
-            <div class="card mt-3">
-                <div class="card-header">
-                    <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Demo Credentials</h6>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-6">
-                            <strong>Admin:</strong><br>
-                            <small class="text-muted">Username: admin</small><br>
-                            <small class="text-muted">Password: admin123</small>
-                        </div>
-                        <div class="col-6">
-                            <strong>User:</strong><br>
-                            <small class="text-muted">Username: user</small><br>
-                            <small class="text-muted">Password: user123</small>
-                        </div>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Quick login buttons for demo
-    const adminBtn = document.createElement('button');
-    adminBtn.className = 'btn btn-outline-danger btn-sm me-2';
-    adminBtn.innerHTML = '<i class="fas fa-user-shield me-1"></i>Quick Admin Login';
-    adminBtn.onclick = function() {
-        document.getElementById('username').value = 'admin';
-        document.getElementById('password').value = 'admin123';
-    };
-    
-    const userBtn = document.createElement('button');
-    userBtn.className = 'btn btn-outline-info btn-sm';
-    userBtn.innerHTML = '<i class="fas fa-user me-1"></i>Quick User Login';
-    userBtn.onclick = function() {
-        document.getElementById('username').value = 'user';
-        document.getElementById('password').value = 'user123';
-    };
-    
-    const cardFooter = document.querySelector('.card-footer');
-    const btnContainer = document.createElement('div');
-    btnContainer.className = 'mt-2';
-    btnContainer.appendChild(adminBtn);
-    btnContainer.appendChild(userBtn);
-    cardFooter.appendChild(btnContainer);
-});
-</script>
 {% endblock %}
