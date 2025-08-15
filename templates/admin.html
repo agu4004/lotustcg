@@ -71,7 +71,7 @@
                                     <td><code>rarity</code></td>
                                     <td><span class="badge bg-warning">No</span></td>
                                     <td>Card rarity</td>
-                                    <td>Common, Uncommon, Rare, Mythic Rare</td>
+                                    <td>Common, Rare, Super Rare, Majestic, Legendary, Promo, Treasure</td>
                                 </tr>
                                 <tr>
                                     <td><code>condition</code></td>
@@ -143,9 +143,12 @@
                                         <label for="add-rarity" class="form-label">Rarity</label>
                                         <select class="form-select" id="add-rarity" name="rarity">
                                             <option value="Common">Common</option>
-                                            <option value="Uncommon">Uncommon</option>
                                             <option value="Rare">Rare</option>
-                                            <option value="Mythic Rare">Mythic Rare</option>
+                                            <option value="Super Rare">Super Rare</option>
+                                            <option value="Majestic">Majestic</option>
+                                            <option value="Legendary">Legendary</option>
+                                            <option value="Promo">Promo</option>
+                                            <option value="Treasure">Treasure</option>
                                         </select>
                                     </div>
                                     <div class="col-md-3">
@@ -246,9 +249,12 @@
                                                                 <label class="form-label-sm text-muted fw-bold">Rarity</label>
                                                                 <select class="form-select form-select-sm" name="rarity">
                                                                     <option value="Common" {% if card.rarity == 'Common' %}selected{% endif %}>Common</option>
-                                                                    <option value="Uncommon" {% if card.rarity == 'Uncommon' %}selected{% endif %}>Uncommon</option>
                                                                     <option value="Rare" {% if card.rarity == 'Rare' %}selected{% endif %}>Rare</option>
-                                                                    <option value="Mythic Rare" {% if card.rarity == 'Mythic Rare' %}selected{% endif %}>Mythic Rare</option>
+                                                                    <option value="Super Rare" {% if card.rarity == 'Super Rare' %}selected{% endif %}>Super Rare</option>
+                                                                    <option value="Majestic" {% if card.rarity == 'Majestic' %}selected{% endif %}>Majestic</option>
+                                                                    <option value="Legendary" {% if card.rarity == 'Legendary' %}selected{% endif %}>Legendary</option>
+                                                                    <option value="Promo" {% if card.rarity == 'Promo' %}selected{% endif %}>Promo</option>
+                                                                    <option value="Treasure" {% if card.rarity == 'Treasure' %}selected{% endif %}>Treasure</option>
                                                                 </select>
                                                             </div>
                                                             <div class="col-6">
