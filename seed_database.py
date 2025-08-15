@@ -22,7 +22,7 @@ def seed_cards():
         {
             'name': 'Black Lotus',
             'set_name': 'Alpha',
-            'rarity': 'Mythic Rare',
+            'rarity': 'Legendary',
             'condition': 'Light Play',
             'price': 15000.00,
             'quantity': 1,
@@ -40,7 +40,7 @@ def seed_cards():
         {
             'name': 'Force of Will',
             'set_name': 'Alliances',
-            'rarity': 'Rare',
+            'rarity': 'Majestic',
             'condition': 'Near Mint',
             'price': 85.00,
             'quantity': 3,
@@ -49,7 +49,7 @@ def seed_cards():
         {
             'name': 'Mox Ruby',
             'set_name': 'Alpha',
-            'rarity': 'Mythic Rare',
+            'rarity': 'Legendary',
             'condition': 'Moderate Play',
             'price': 8500.00,
             'quantity': 1,
@@ -58,7 +58,7 @@ def seed_cards():
         {
             'name': 'Serra Angel',
             'set_name': 'Core Set 2020',
-            'rarity': 'Uncommon',
+            'rarity': 'Rare',
             'condition': 'Near Mint',
             'price': 0.75,
             'quantity': 50,
@@ -67,7 +67,7 @@ def seed_cards():
         {
             'name': 'Shivan Dragon',
             'set_name': 'Core Set 2019',
-            'rarity': 'Rare',
+            'rarity': 'Majestic',
             'condition': 'Near Mint',
             'price': 2.25,
             'quantity': 12,
@@ -76,7 +76,7 @@ def seed_cards():
         {
             'name': 'Tarmogoyf',
             'set_name': 'Modern Masters 2017',
-            'rarity': 'Mythic Rare',
+            'rarity': 'Legendary',
             'condition': 'Near Mint',
             'price': 45.00,
             'quantity': 4,

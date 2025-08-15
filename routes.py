@@ -326,7 +326,7 @@ def download_sample_csv():
     
     sample_csv = """name,set_name,rarity,condition,price,quantity,description,image_url
 "Lightning Bolt","Core Set","Common","Near Mint",1.50,10,"Classic red instant spell","https://example.com/lightning-bolt.jpg"
-"Black Lotus","Alpha","Mythic Rare","Light Play",5000.00,1,"The most powerful mox","https://example.com/black-lotus.jpg"
+"Black Lotus","Alpha","Legendary","Light Play",5000.00,1,"The most powerful mox","https://example.com/black-lotus.jpg"
 "Counterspell","Beta","Common","Near Mint",25.00,5,"Counter target spell","https://example.com/counterspell.jpg"
 """
     

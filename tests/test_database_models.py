@@ -236,7 +236,7 @@ class TestDatabaseStorage:
         """Test processing valid CSV data"""
         csv_content = '''name,set_name,rarity,price,quantity
 Test Card,Test Set,Common,1.50,10
-Another Card,Another Set,Rare,5.00,3'''
+Another Card,Another Set,Majestic,5.00,3'''
         
         results = storage.process_csv_upload(csv_content)
         

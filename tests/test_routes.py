@@ -44,7 +44,7 @@ class TestPublicRoutes:
         """Test catalog route with cards"""
         with patch('routes.storage.search_cards', return_value=sample_cards_list):
             with patch('routes.storage.get_unique_sets', return_value=['Alpha', 'Beta']):
-                with patch('routes.storage.get_unique_rarities', return_value=['Common', 'Rare']):
+                with patch('routes.storage.get_unique_rarities', return_value=['Common', 'Majestic']):
                     response = client.get('/catalog')
                     
                     assert response.status_code == 200

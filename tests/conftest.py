@@ -77,7 +77,7 @@ def sample_cards_list():
         {
             'name': 'Black Lotus',
             'set_name': 'Alpha',
-            'rarity': 'Rare',
+            'rarity': 'Majestic',
             'condition': 'Light Play',
             'price': 5000.00,
             'quantity': 1,
@@ -100,7 +100,7 @@ def csv_content():
     """Sample CSV content for testing uploads"""
     return '''name,set_name,rarity,condition,price,quantity,description
 Lightning Bolt,Alpha,Common,Near Mint,1.50,10,Classic red instant spell
-Black Lotus,Alpha,Rare,Light Play,5000.00,1,The most powerful mox
+Black Lotus,Alpha,Majestic,Light Play,5000.00,1,The most powerful mox
 Counterspell,Beta,Common,Near Mint,25.00,5,Counter target spell'''
 
 

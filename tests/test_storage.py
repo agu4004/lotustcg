@@ -127,7 +127,7 @@ class TestInMemoryStorage:
         results = storage.search_cards(rarity_filter="Common")
         assert len(results) == 2
         
-        results = storage.search_cards(rarity_filter="Rare")
+        results = storage.search_cards(rarity_filter="Majestic")
         assert len(results) == 1
         assert results[0]['name'] == 'Black Lotus'
     
@@ -181,7 +181,7 @@ class TestInMemoryStorage:
             storage.add_card(card_data)
         
         rarities = storage.get_unique_rarities()
-        assert set(rarities) == {'Common', 'Rare'}
+        assert set(rarities) == {'Common', 'Majestic'}
         assert len(rarities) == 2
     
     def test_get_unique_rarities_empty(self, storage):
