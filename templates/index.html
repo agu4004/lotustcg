@@ -224,7 +224,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // Hiển thị flash messages
                 if (data.flashed_messages && data.flashed_messages.length > 0) {
-                    const flashContainer = document.querySelector('.flash-messages');
+                    const flashContainer = document.querySelector('.flash-messages-container');
                     if (flashContainer) {
                         data.flashed_messages.forEach(flash => {
                             const alertDiv = document.createElement('div');
