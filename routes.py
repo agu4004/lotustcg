@@ -1,10 +1,11 @@
-from flask import render_template, request, redirect, url_for, flash, session, jsonify
+from flask import render_template, request, redirect, url_for, flash, session, jsonify, current_app, get_flashed_messages
 from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash
 from app import app, db
 from storage_db import storage
-from models import User
+from models import User, Card
 from auth import admin_required, get_redirect_target
+from decimal import Decimal
 import logging
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,7 @@ def card_detail(card_id):
     
     return render_template('card_detail.html', card=card)
 
+#obsolete function, replaced by cart_add_json
 @app.route('/add_to_cart/<card_id>', methods=['POST'])
 def add_to_cart(card_id):
     """Add card to cart"""
@@ -106,7 +108,23 @@ def add_to_cart(card_id):
     session.modified = True
     
     flash(f'Added {quantity} x {card["name"]} to cart', 'success')
-    return redirect(url_for('card_detail', card_id=card_id))
+    if request.is_json or request.accept_mimetypes.best == "application/json":
+        request_json = {"card_id": card_id, "qty": request.json.get("qty", 1) if request.is_json else 1}
+        # giả lập gọi /cart/add
+        with current_app.test_request_context(json=request_json):
+            return cart_add_json()
+    # ---- hành vi cũ (giữ nguyên) ----
+    cart = _get_cart()
+    cur = int(cart.get(str(card_id), 0))
+    card = Card.query.get_or_404(card_id)
+    limit = _per_item_limit()
+    stock = int(card.quantity or 0)
+    max_allowed = stock if limit <= 0 else min(stock, limit)
+    new_qty = min(cur + 1, max_allowed)
+    cart[str(card_id)] = new_qty
+    _set_cart(cart)
+
+    return redirect(url_for('view_cart'))
 
 @app.route('/cart')
 def view_cart():
@@ -484,3 +502,110 @@ def add_card_form():
         flash(f'Error adding card: {str(e)}', 'error')
     
     return redirect(url_for('admin'))
+
+def _per_item_limit():
+    # ưu tiên config (ví dụ set trong app.config['CART_MAX_PER_ITEM'])
+    v = current_app.config.get('CART_MAX_PER_ITEM')
+    if v:
+        try:
+            return int(v)
+        except Exception:
+            pass
+    # fallback ENV (nếu bạn dùng python-dotenv)
+    import os
+    v = os.getenv("CART_MAX_PER_ITEM", "").strip()
+    if v.isdigit():
+        return int(v)
+    return 0  # 0 = chỉ giới hạn bởi tồn kho
+
+def _get_cart():
+    cart = session.get("cart")
+    if not isinstance(cart, dict):
+        cart = {}
+    return cart
+
+def _set_cart(cart):
+    session["cart"] = cart
+    session.modified = True
+
+def _cart_totals(cart: dict):
+    """Tính tổng số item & subtotal (Decimal)"""
+    ids = [int(i) for i in cart.keys()]
+    cards = {c.id: c for c in Card.query.filter(Card.id.in_(ids)).all()} if ids else {}
+    count = 0
+    subtotal = Decimal("0")
+    for sid, qty in cart.items():
+        try:
+            cid = int(sid); q = int(qty)
+        except Exception:
+            continue
+        count += q
+        card = cards.get(cid)
+        if card and card.price is not None:
+            subtotal += Decimal(card.price) * q
+    return {"count": count, "subtotal": subtotal}
+
+# ---- NEW: endpoint JSON để thêm vào giỏ mà không redirect ----
+@app.post("/cart/add")
+def cart_add_json():
+    """
+    Body: JSON { "card_id": <int>, "qty": <int (optional, default 1)> }
+    Trả: { ok, at_max, item_qty, cart_qty, subtotal, message, flashed_messages }
+    """
+    payload = request.get_json(silent=True) or {}
+    card_id = payload.get("card_id") or request.form.get("card_id")
+    qty = payload.get("qty") or request.form.get("qty") or 1
+    try:
+        card_id = int(card_id); qty = max(1, int(qty))
+    except Exception:
+        flash('Invalid card ID or quantity', 'error')
+        return jsonify(ok=False, message="Invalid card_id/qty",
+                      flashed_messages=list_flashed_messages()), 400
+
+    card = Card.query.get_or_404(card_id)
+
+    # max theo tồn kho và/hoặc giới hạn mỗi sản phẩm
+    limit = _per_item_limit()
+    stock = int(card.quantity or 0)
+    max_allowed = stock if limit <= 0 else min(stock, limit)
+
+    cart = _get_cart()
+    cur = int(cart.get(str(card_id), 0))
+
+    if max_allowed <= 0:
+        # hết hàng hoặc không cho mua
+        flash('Out of stock', 'error')
+        totals = _cart_totals(cart)
+        return jsonify(ok=False, at_max=True, item_qty=cur, cart_qty=totals["count"],
+                      subtotal=str(totals["subtotal"]), 
+                      flashed_messages=list_flashed_messages()), 200
+
+    if cur >= max_allowed:
+        flash('Maximum quantity reached for this item', 'warning')
+        totals = _cart_totals(cart)
+        return jsonify(ok=False, at_max=True, item_qty=cur, cart_qty=totals["count"],
+                      subtotal=str(totals["subtotal"]),
+                      flashed_messages=list_flashed_messages()), 200
+
+    new_qty = min(cur + qty, max_allowed)
+    cart[str(card_id)] = new_qty
+    _set_cart(cart)
+    totals = _cart_totals(cart)
+
+    flash(f'Added {qty} x {card.name} to cart', 'success')
+    return jsonify(ok=True,
+                  at_max=(new_qty >= max_allowed),
+                  item_qty=new_qty,
+                  cart_qty=totals["count"],
+                  subtotal=str(totals["subtotal"]),
+                  flashed_messages=list_flashed_messages()), 200
+
+def list_flashed_messages():
+    """Helper function to get all flashed messages"""
+    messages = []
+    for category, message in get_flashed_messages(with_categories=True):
+        messages.append({
+            'category': category,
+            'message': message
+        })
+    return messages

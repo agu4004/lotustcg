@@ -344,13 +344,7 @@
                         </table>
                     </div>
                     
-                    {% if cards|length > 50 %}
-                    <div class="text-center">
-                        <p class="text-muted">Showing first 50 cards of {{ cards|length }} total</p>
-                        <a href="{{ url_for('catalog') }}" class="btn btn-outline-primary">
-                            <i class="fas fa-search me-2"></i>View All in Catalog
-                        </a>
-                    </div>
+                    {% if cards %}
                     {% endif %}
                     {% else %}
                     <div class="text-center py-4">
