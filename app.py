@@ -19,7 +19,7 @@ migrate = Migrate()
 login_manager = LoginManager()
 
 # Create the app
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static', template_folder='templates', static_url_path='/static')
 
 # Configuration
 app.secret_key = os.environ.get("SESSION_SECRET", "dev-secret-key-change-in-production")
