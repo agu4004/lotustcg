@@ -106,7 +106,7 @@
                             <i class="fas fa-eye me-1"></i>View Details
                         </a>
                         {% if card.quantity > 0 %}
-                        <form method="POST" action="{{ url_for('add_to_cart', card_id=card.id) }}" class="flex-fill">
+                        <form method="POST" action="/cart/add" class="add-to-cart-form flex-fill" data-card-id="{{ card.id }}">
                             <input type="hidden" name="quantity" value="1">
                             <button type="submit" class="btn btn-success w-100">
                                 <i class="fas fa-cart-plus me-1"></i>Add to Cart
@@ -168,4 +168,99 @@
         </div>
     </div>
 </div>
+
+<div class="flash-messages">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.add-to-cart-form').forEach(function(form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Lấy card_id từ data attribute
+            const cardId = this.dataset.cardId;
+            if (!cardId) {
+                console.error('No card ID found');
+                return;
+            }
+
+            fetch('/cart/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    card_id: cardId,
+                    qty: 1
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.ok) {
+                    // Cập nhật số lượng giỏ hàng
+                    const cartCount = document.getElementById('cart-count');
+                    if (cartCount) {
+                        cartCount.textContent = data.cart_qty;
+                    }
+                }
+
+                // Hiển thị flash messages
+                if (data.flashed_messages && data.flashed_messages.length > 0) {
+                    const flashContainer = document.querySelector('.flash-messages');
+                    if (flashContainer) {
+                        data.flashed_messages.forEach(flash => {
+                            const alertDiv = document.createElement('div');
+                            alertDiv.className = `alert alert-${flash.category} alert-dismissible fade show`;
+                            alertDiv.innerHTML = `
+                                ${flash.message}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            `;
+                            flashContainer.appendChild(alertDiv);
+
+                            setTimeout(() => {
+                                alertDiv.remove();
+                            }, 3000);
+                        });
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                const flashContainer = document.querySelector('.flash-messages');
+                if (flashContainer) {
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+                    alertDiv.innerHTML = `
+                        Error adding item to cart
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    `;
+                    flashContainer.appendChild(alertDiv);
+
+                    setTimeout(() => {
+                        alertDiv.remove();
+                    }, 3000);
+                }
+            });
+        });
+    });
+});
+</script>
 {% endblock %}

@@ -46,9 +46,7 @@
                         <a class="nav-link" href="{{ url_for('view_cart') }}">
                             <i class="fas fa-shopping-cart me-1"></i>
                             Cart
-                            {% if cart_count > 0 %}
-                                <span class="badge bg-primary ms-1">{{ cart_count }}</span>
-                            {% endif %}
+                            <span class="badge bg-primary ms-1" id="cart-count">{{ cart_count }}</span>
                         </a>
                     </li>
                     
