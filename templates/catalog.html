@@ -242,7 +242,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // Display flash messages
                 if (data.flashed_messages && data.flashed_messages.length > 0) {
-                    const flashContainer = document.querySelector('.flash-messages-container');
+                    const flashContainer = document.querySelector('.flash-messages');
                     if (flashContainer) {
                         data.flashed_messages.forEach(flash => {
                             const alertDiv = document.createElement('div');
