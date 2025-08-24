@@ -25,27 +25,13 @@
                             </div>
                         </div>
                         
-                        <div class="d-flex gap-2 flex-wrap">
+                        <div class="d-flex gap-2">
                             <button type="submit" class="btn btn-success">
                                 <i class="fas fa-upload me-2"></i>Upload Cards
                             </button>
-                            <div class="btn-group" role="group">
-                                <button type="button" class="btn btn-outline-info dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                                    <i class="fas fa-download me-2"></i>Download CSV
-                                </button>
-                                <ul class="dropdown-menu">
-                                    <li>
-                                        <a class="dropdown-item" href="{{ url_for('download_sample_csv') }}">
-                                            <i class="fas fa-file-alt me-2"></i>Sample Template
-                                        </a>
-                                    </li>
-                                    <li>
-                                        <a class="dropdown-item" href="{{ url_for('download_inventory_csv') }}">
-                                            <i class="fas fa-boxes me-2"></i>Current Inventory
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
+                            <a href="{{ url_for('download_sample_csv') }}" class="btn btn-outline-info">
+                                <i class="fas fa-download me-2"></i>Download Sample CSV
+                            </a>
                         </div>
                     </form>
                 </div>
@@ -471,13 +457,7 @@
                         {% endif %}
                     </a>
                     <a href="{{ url_for('download_sample_csv') }}" class="btn btn-outline-info">
-                        <i class="fas fa-file-alt me-2"></i>Sample CSV
-                    </a>
-                    <a href="{{ url_for('download_inventory_csv') }}" class="btn btn-outline-secondary">
-                        <i class="fas fa-boxes me-2"></i>Export Inventory
-                        {% if cards %}
-                            <span class="badge bg-secondary ms-1">{{ cards|length }}</span>
-                        {% endif %}
+                        <i class="fas fa-download me-2"></i>Sample CSV
                     </a>
                 </div>
             </div>
