@@ -130,34 +130,8 @@
                             <div class="small">
                                 <p class="mb-1"><strong>Set:</strong> {{ card.set_name }}</p>
                                 <p class="mb-1"><strong>Condition:</strong> {{ card.condition }}</p>
-                                <p class="mb-1"><strong>Foiling:</strong>
-                                    {% if card.foiling == 'NF' %}
-                                        <span class="badge bg-light text-dark">Non Foil</span>
-                                    {% elif card.foiling == 'RF' %}
-                                        <span class="badge bg-info">Rainbow Foil</span>
-                                    {% elif card.foiling == 'CF' %}
-                                        <span class="badge bg-primary">Cold Foil</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">{{ card.foiling }}</span>
-                                    {% endif %}
-                                </p>
-                                <p class="mb-1"><strong>Art Style:</strong>
-                                    {% if card.art_style == 'normal' %}
-                                        <span class="badge bg-light text-dark">Normal</span>
-                                    {% elif card.art_style == 'EA' %}
-                                        <span class="badge bg-success">Extended Art</span>
-                                    {% elif card.art_style == 'WB' %}
-                                        <span class="badge bg-warning text-dark">White Border</span>
-                                    {% elif card.art_style == 'ALT' %}
-                                        <span class="badge bg-danger">Alternate Art</span>
-                                    {% elif card.art_style == 'GF' %}
-                                        <span class="badge bg-warning">Golden</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">{{ card.art_style }}</span>
-                                    {% endif %}
-                                </p>
                                 <p class="mb-1"><strong>Price:</strong> <span class="text-success fw-bold">{{ "{:,.0f}".format(card.price) }} VND</span></p>
-                                <p class="mb-2"><strong>Available:</strong>
+                                <p class="mb-2"><strong>Available:</strong> 
                                     {% if card.quantity > 0 %}
                                         <span class="text-success">{{ card.quantity }} copies</span>
                                     {% else %}
