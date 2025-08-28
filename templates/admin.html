@@ -140,7 +140,7 @@
                                     <td><code>art_style</code></td>
                                     <td><span class="badge bg-warning">No</span></td>
                                     <td>Card art style</td>
-                                    <td>normal, EA, WB, ALT, GF</td>
+                                    <td>Normal, EA, WB, ALT, GF, Marvel</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -224,11 +224,12 @@
                                     <div class="col-md-6">
                                         <label for="add-art-style" class="form-label">Art Style</label>
                                         <select class="form-select" id="add-art-style" name="art_style">
-                                            <option value="normal">Normal</option>
+                                            <option value="Normal">Normal</option>
                                             <option value="EA">Extended Art (EA)</option>
                                             <option value="WB">White Border (WB)</option>
                                             <option value="ALT">Alternate Art (ALT)</option>
                                             <option value="GF">Golden (GF)</option>
+                                            <option value="Marvel">Marvel</option>
                                         </select>
                                     </div>
                                     <div class="col-md-12">
@@ -354,11 +355,12 @@
                                                             <div class="col-6">
                                                                 <label class="form-label-sm text-muted fw-bold">Art Style</label>
                                                                 <select class="form-select form-select-sm" name="art_style">
-                                                                    <option value="normal" {% if card.art_style == 'normal' %}selected{% endif %}>Normal</option>
+                                                                    <option value="Normal" {% if card.art_style == 'Normal' %}selected{% endif %}>Normal</option>
                                                                     <option value="EA" {% if card.art_style == 'EA' %}selected{% endif %}>Extended Art (EA)</option>
                                                                     <option value="WB" {% if card.art_style == 'WB' %}selected{% endif %}>White Border (WB)</option>
                                                                     <option value="ALT" {% if card.art_style == 'ALT' %}selected{% endif %}>Alternate Art (ALT)</option>
                                                                     <option value="GF" {% if card.art_style == 'GF' %}selected{% endif %}>Golden (GF)</option>
+                                                                    <option value="Marvel" {% if card.art_style == 'Marvel' %}selected{% endif %}>Marvel</option>
                                                                 </select>
                                                             </div>
                                                             <div class="col-12">
@@ -405,7 +407,7 @@
                                             </td>
                                             <td>
                                                 <div id="art-style-display-{{ card.id }}">
-                                                    {% if card.art_style == 'normal' %}
+                                                    {% if card.art_style == 'Normal' %}
                                                         <span class="badge bg-light text-dark" style="font-size: 10px;">Normal</span>
                                                     {% elif card.art_style == 'EA' %}
                                                         <span class="badge bg-success" style="font-size: 10px;">EA</span>
@@ -415,6 +417,8 @@
                                                         <span class="badge bg-danger" style="font-size: 10px;">ALT</span>
                                                     {% elif card.art_style == 'GF' %}
                                                         <span class="badge bg-warning" style="font-size: 10px;">GF</span>
+                                                    {% elif card.art_style == 'Marvel' %}
+                                                        <span class="badge bg-warning" style="font-size: 10px;">Marvel</span>
                                                     {% else %}
                                                         <span class="badge bg-secondary" style="font-size: 10px;">{{ card.art_style }}</span>
                                                     {% endif %}

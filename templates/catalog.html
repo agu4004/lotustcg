@@ -142,7 +142,7 @@
                                     {% endif %}
                                 </p>
                                 <p class="mb-1"><strong>Art Style:</strong>
-                                    {% if card.art_style == 'normal' %}
+                                    {% if card.art_style == 'Normal' %}
                                         <span class="badge bg-light text-dark">Normal</span>
                                     {% elif card.art_style == 'EA' %}
                                         <span class="badge bg-success">Extended Art</span>
@@ -152,6 +152,8 @@
                                         <span class="badge bg-danger">Alternate Art</span>
                                     {% elif card.art_style == 'GF' %}
                                         <span class="badge bg-warning">Golden</span>
+                                    {% elif card.art_style == 'Marvel' %}
+                                        <span class="badge bg-warning">Marvel</span>
                                     {% else %}
                                         <span class="badge bg-secondary">{{ card.art_style }}</span>
                                     {% endif %}
