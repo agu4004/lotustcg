@@ -85,7 +85,7 @@
                                     <td><code>rarity</code></td>
                                     <td><span class="badge bg-warning">No</span></td>
                                     <td>Card rarity</td>
-                                    <td>Common, Rare, Super Rare, Majestic, Legendary, Promo, Treasure</td>
+                                    <td>Common, Rare, Super Rare, Majestic, Legendary, Promo, Treasure, Marvel</td>
                                 </tr>
                                 <tr>
                                     <td><code>condition</code></td>
@@ -163,6 +163,7 @@
                                             <option value="Legendary">Legendary</option>
                                             <option value="Promo">Promo</option>
                                             <option value="Treasure">Treasure</option>
+                                            <option value="Marvel">Marvel</option>
                                         </select>
                                     </div>
                                     <div class="col-md-3">
@@ -269,6 +270,7 @@
                                                                     <option value="Legendary" {% if card.rarity == 'Legendary' %}selected{% endif %}>Legendary</option>
                                                                     <option value="Promo" {% if card.rarity == 'Promo' %}selected{% endif %}>Promo</option>
                                                                     <option value="Treasure" {% if card.rarity == 'Treasure' %}selected{% endif %}>Treasure</option>
+                                                                    <option value="Marvel" {% if card.rarity == 'Marvel' %}selected{% endif %}>Marvel</option>
                                                                 </select>
                                                             </div>
                                                             <div class="col-6">
