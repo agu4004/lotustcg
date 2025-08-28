@@ -49,6 +49,7 @@ class Card(db.Model):
     image_url: Mapped[str] = mapped_column(String(500), nullable=True)
     foiling: Mapped[str] = mapped_column(String(20), nullable=False, default='NF')
     art_style: Mapped[str] = mapped_column(String(20), nullable=False, default='normal')
+    is_deleted: Mapped[bool] = mapped_column(db.Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     
@@ -66,9 +67,15 @@ class Card(db.Model):
             'image_url': self.image_url or '',
             'foiling': self.foiling,
             'art_style': self.art_style,
+            'is_deleted': self.is_deleted,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
+
+    def soft_delete(self):
+        """Mark card as deleted without removing from database"""
+        self.is_deleted = True
+        self.updated_at = func.now()
     
     def __str__(self) -> str:
         """String representation of card"""

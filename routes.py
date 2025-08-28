@@ -646,26 +646,19 @@ def edit_card_form(card_id):
 @app.route('/admin/delete_card/<card_id>', methods=['POST'])
 @admin_required
 def delete_card_form(card_id):
-    """Handle card deletion - admin only"""
+    """Handle card soft deletion - admin only"""
     try:
-        from models import Card
-        card = Card.query.get(int(card_id))
-        if not card:
-            flash('Card not found', 'error')
-            return redirect(url_for('admin'))
-        
-        card_name = card.name
-        db.session.delete(card)
-        db.session.commit()
-        
-        flash(f'Card "{card_name}" deleted successfully', 'success')
-        logger.debug(f"Deleted card: {card_name} (ID: {card_id})")
-        
+        success = storage.soft_delete_card(card_id)
+        if success:
+            flash('Card deleted successfully (order history preserved)', 'success')
+            logger.debug(f"Soft deleted card (ID: {card_id})")
+        else:
+            flash('Card not found or already deleted', 'error')
+
     except Exception as e:
-        db.session.rollback()
-        logger.error(f"Error deleting card: {e}")
+        logger.error(f"Error soft deleting card: {e}")
         flash(f'Error deleting card: {str(e)}', 'error')
-    
+
     return redirect(url_for('admin'))
 
 @app.route('/admin/add_card', methods=['POST'])

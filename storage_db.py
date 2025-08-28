@@ -64,9 +64,9 @@ class DatabaseStorage:
             return None
     
     def get_all_cards(self) -> List[Dict[str, Any]]:
-        """Get all cards"""
+        """Get all non-deleted cards"""
         from models import Card
-        cards = Card.query.all()
+        cards = Card.query.filter(Card.is_deleted == False).all()
         return [card.to_dict() for card in cards]
     
     def search_cards(self, query: str = "", set_filter: str = "", rarity_filter: str = "", 
@@ -100,20 +100,23 @@ class DatabaseStorage:
         # Apply all filters
         if filters:
             card_query = card_query.filter(and_(*filters))
-        
+
+        # Always filter out deleted cards
+        card_query = card_query.filter(Card.is_deleted == False)
+
         cards = card_query.all()
         return [card.to_dict() for card in cards]
     
     def get_unique_sets(self) -> List[str]:
-        """Get unique set names"""
+        """Get unique set names from non-deleted cards"""
         from models import Card
-        result = db.session.query(Card.set_name).distinct().all()
+        result = db.session.query(Card.set_name).filter(Card.is_deleted == False).distinct().all()
         return [row[0] for row in result if row[0]]
-    
+
     def get_unique_rarities(self) -> List[str]:
-        """Get unique rarities"""
+        """Get unique rarities from non-deleted cards"""
         from models import Card
-        result = db.session.query(Card.rarity).distinct().all()
+        result = db.session.query(Card.rarity).filter(Card.is_deleted == False).distinct().all()
         return [row[0] for row in result if row[0]]
     
     def update_card_quantity(self, card_id: str, new_quantity: int) -> bool:
@@ -133,7 +136,7 @@ class DatabaseStorage:
 
     def find_existing_card(self, name: str, set_name: str, rarity: str, condition: str,
                           foiling: str, art_style: str) -> Optional[Dict[str, Any]]:
-        """Find existing card by matching criteria"""
+        """Find existing non-deleted card by matching criteria"""
         from models import Card
         try:
             card = Card.query.filter(
@@ -142,13 +145,30 @@ class DatabaseStorage:
                 Card.rarity == rarity,
                 Card.condition == condition,
                 Card.foiling == foiling,
-                Card.art_style == art_style
+                Card.art_style == art_style,
+                Card.is_deleted == False
             ).first()
 
             return card.to_dict() if card else None
         except Exception as e:
             logger.error(f"Error finding existing card: {e}")
             return None
+
+    def soft_delete_card(self, card_id: str) -> bool:
+        """Soft delete a card by marking it as deleted"""
+        from models import Card
+        try:
+            card = Card.query.get(int(card_id))
+            if card and not card.is_deleted:
+                card.soft_delete()
+                db.session.commit()
+                logger.debug(f"Soft deleted card: {card.name} (ID: {card_id})")
+                return True
+            return False
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Error soft deleting card: {e}")
+            return False
 
     def update_existing_card_quantity(self, card_id: str, additional_quantity: int,
                                      card_data: Optional[Dict[str, Any]] = None) -> bool:
