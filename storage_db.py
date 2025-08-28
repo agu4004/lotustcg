@@ -204,15 +204,19 @@ class DatabaseStorage:
             return False
     
     def clear_all_cards(self):
-        """Clear all cards from storage"""
+        """Soft delete all cards from storage"""
         from models import Card
         try:
-            Card.query.delete()
+            # Soft delete all non-deleted cards
+            cards_to_delete = Card.query.filter(Card.is_deleted == False).all()
+            for card in cards_to_delete:
+                card.soft_delete()
+
             db.session.commit()
-            logger.info("Cleared all cards from database")
+            logger.info(f"Soft deleted {len(cards_to_delete)} cards from database")
         except Exception as e:
             db.session.rollback()
-            logger.error(f"Error clearing cards: {e}")
+            logger.error(f"Error soft deleting cards: {e}")
             raise
     
     def process_csv_upload(self, csv_content: str) -> Dict[str, Any]:

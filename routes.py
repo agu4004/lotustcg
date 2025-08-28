@@ -485,21 +485,16 @@ def update_card(card_id):
 @app.route('/api/cards/<card_id>', methods=['DELETE'])
 @admin_required
 def delete_card(card_id):
-    """Delete a card - admin only"""
+    """Soft delete a card - admin only"""
     try:
-        from models import Card
-        card = Card.query.get(int(card_id))
-        if not card:
-            return jsonify({'error': 'Card not found'}), 404
-        
-        # Remove card from database
-        db.session.delete(card)
-        db.session.commit()
-        logger.debug(f"Deleted card: {card.name} (ID: {card_id})")
-        return jsonify({'success': True, 'message': 'Card deleted'}), 200
+        success = storage.soft_delete_card(card_id)
+        if success:
+            logger.debug(f"Soft deleted card (ID: {card_id})")
+            return jsonify({'success': True, 'message': 'Card deleted successfully (order history preserved)'}), 200
+        else:
+            return jsonify({'error': 'Card not found or already deleted'}), 404
     except Exception as e:
-        db.session.rollback()
-        logger.error(f"Error deleting card: {e}")
+        logger.error(f"Error soft deleting card: {e}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/admin/sample_csv')
