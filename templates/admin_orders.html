@@ -106,8 +106,10 @@
                                     <td>
                                         {% if order.shipment_method == 'shipping' %}
                                         <i class="fas fa-truck text-primary" title="Shipping"></i>
+                                        <div><small class="text-muted">Shipping</small></div>
                                         {% else %}
                                         <i class="fas fa-store text-success" title="In-store Pickup"></i>
+                                        <div><small class="text-muted">{{ order.pickup_location or 'Pickup' }}</small></div>
                                         {% endif %}
                                     </td>
                                     <td>

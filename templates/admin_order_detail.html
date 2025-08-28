@@ -92,6 +92,9 @@
                                                 <i class="fas fa-truck text-primary me-1"></i>Shipping
                                                 {% else %}
                                                 <i class="fas fa-store text-success me-1"></i>In-store Pickup
+                                                {% if order.pickup_location %}
+                                                <br><small class="text-muted">Location: {{ order.pickup_location }}</small>
+                                                {% endif %}
                                                 {% endif %}
                                             </td>
                                         </tr>

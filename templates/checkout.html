@@ -51,6 +51,16 @@
                             </div>
                         </div>
 
+                        <!-- Pickup Location (shown only when pickup is selected) -->
+                        <div id="pickup-location-section" class="mb-4" style="display: none;">
+                            <h5>Pickup Location *</h5>
+                            <select class="form-select" id="pickup_location" name="pickup_location">
+                                <option value="">Select a pickup location</option>
+                                <option value="Iron Hammer">Iron Hammer</option>
+                                <option value="Floating Dojo">Floating Dojo</option>
+                            </select>
+                        </div>
+
                         <!-- Shipping Address (shown only when shipping is selected) -->
                         <div id="shipping-address-section" class="mb-4" style="display: none;">
                             <h5>Shipping Address</h5>
@@ -135,6 +145,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const shippingRadio = document.getElementById('shipping');
     const pickupRadio = document.getElementById('pickup');
     const shippingAddressSection = document.getElementById('shipping-address-section');
+    const pickupLocationSection = document.getElementById('pickup-location-section');
+    const pickupLocationSelect = document.getElementById('pickup_location');
 
     // Shipping address fields
     const shippingFields = [
@@ -144,28 +156,35 @@ document.addEventListener('DOMContentLoaded', function() {
         'shipping_postal_code'
     ];
 
-    function toggleShippingAddress() {
+    function toggleSections() {
         if (shippingRadio.checked) {
             shippingAddressSection.style.display = 'block';
+            pickupLocationSection.style.display = 'none';
             // Make address fields required
             shippingFields.forEach(fieldId => {
                 const field = document.getElementById(fieldId);
                 field.required = true;
             });
-        } else {
+            // Remove required from pickup location
+            pickupLocationSelect.required = false;
+            pickupLocationSelect.value = '';
+        } else if (pickupRadio.checked) {
             shippingAddressSection.style.display = 'none';
-            // Remove required attribute
+            pickupLocationSection.style.display = 'block';
+            // Remove required from address fields
             shippingFields.forEach(fieldId => {
                 const field = document.getElementById(fieldId);
                 field.required = false;
                 field.value = ''; // Clear values
             });
+            // Make pickup location required
+            pickupLocationSelect.required = true;
         }
     }
 
     // Add event listeners
-    shippingRadio.addEventListener('change', toggleShippingAddress);
-    pickupRadio.addEventListener('change', toggleShippingAddress);
+    shippingRadio.addEventListener('change', toggleSections);
+    pickupRadio.addEventListener('change', toggleSections);
 
     // Form validation
     const form = document.getElementById('checkout-form');

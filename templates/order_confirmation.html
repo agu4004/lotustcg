@@ -45,6 +45,9 @@
                                             <i class="fas fa-truck me-1"></i>Shipping
                                         {% else %}
                                             <i class="fas fa-store me-1"></i>In-store Pickup
+                                            {% if order.pickup_location %}
+                                            <br><small class="text-muted">Location: {{ order.pickup_location }}</small>
+                                            {% endif %}
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -155,7 +158,10 @@
                             <p class="text-muted mb-0">We'll ship your order to the provided address.</p>
                             {% else %}
                             <h6><i class="fas fa-store text-success me-2"></i>Pickup</h6>
-                            <p class="text-muted mb-0">Your order will be ready for pickup at our store.</p>
+                            <p class="text-muted mb-0">
+                                Your order will be ready for pickup
+                                {% if order.pickup_location %}at {{ order.pickup_location }}{% else %}at our store{% endif %}.
+                            </p>
                             {% endif %}
                         </div>
                     </div>

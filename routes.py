@@ -212,6 +212,7 @@ def checkout():
             shipping_province = None
             shipping_postal_code = None
             shipping_country = None
+            pickup_location = None
 
             if shipment_method == 'shipping':
                 shipping_address = request.form.get('shipping_address', '').strip()
@@ -222,6 +223,14 @@ def checkout():
 
                 if not all([shipping_address, shipping_city, shipping_province, shipping_postal_code]):
                     flash('All shipping address fields are required for shipping orders', 'error')
+                    return redirect(url_for('checkout'))
+            elif shipment_method == 'pickup':
+                pickup_location = request.form.get('pickup_location', '').strip()
+                if not pickup_location:
+                    flash('Please select a pickup location', 'error')
+                    return redirect(url_for('checkout'))
+                if pickup_location not in ['Iron Hammer', 'Floating Dojo']:
+                    flash('Please select a valid pickup location', 'error')
                     return redirect(url_for('checkout'))
 
             # Calculate order total and validate stock
@@ -262,6 +271,7 @@ def checkout():
                 contact_number=contact_number,
                 facebook_details=request.form.get('facebook_details', ''),
                 shipment_method=shipment_method,
+                pickup_location=pickup_location,
                 status='pending',
                 total_amount=total_amount,
                 shipping_address=shipping_address,

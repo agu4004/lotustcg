@@ -90,6 +90,7 @@ class Order(db.Model):
     contact_number: Mapped[str] = mapped_column(String(20), nullable=False)
     facebook_details: Mapped[str] = mapped_column(Text, nullable=True)
     shipment_method: Mapped[str] = mapped_column(String(20), nullable=False)  # 'shipping' or 'pickup'
+    pickup_location: Mapped[str] = mapped_column(String(50), nullable=True)  # 'Iron Hammer' or 'Floating Dojo'
     status: Mapped[str] = mapped_column(String(20), nullable=False, default='pending')
     total_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
 
@@ -114,6 +115,7 @@ class Order(db.Model):
             'contact_number': self.contact_number,
             'facebook_details': self.facebook_details,
             'shipment_method': self.shipment_method,
+            'pickup_location': self.pickup_location,
             'status': self.status,
             'total_amount': float(self.total_amount),
             'shipping_address': self.shipping_address,
