@@ -3,6 +3,19 @@
 {% block title %}Admin Panel - The Lotus TCG{% endblock %}
 
 {% block content %}
+<style>
+.table-compact {
+    font-size: 12px;
+}
+.table-compact td {
+    padding: 0.25rem 0.5rem;
+    vertical-align: middle;
+}
+.table-compact .badge {
+    font-size: 10px;
+    padding: 0.2em 0.4em;
+}
+</style>
 <div class="container my-4">
     <div class="row">
         <div class="col-lg-8">
@@ -85,7 +98,7 @@
                                     <td><code>rarity</code></td>
                                     <td><span class="badge bg-warning">No</span></td>
                                     <td>Card rarity</td>
-                                    <td>Common, Rare, Super Rare, Majestic, Legendary, Promo, Treasure</td>
+                                    <td>Common, Rare, Super Rare, Majestic, Legendary, Promo, Treasure, Marvel</td>
                                 </tr>
                                 <tr>
                                     <td><code>condition</code></td>
@@ -163,6 +176,7 @@
                                             <option value="Legendary">Legendary</option>
                                             <option value="Promo">Promo</option>
                                             <option value="Treasure">Treasure</option>
+                                            <option value="Marvel">Marvel</option>
                                         </select>
                                     </div>
                                     <div class="col-md-3">
@@ -269,6 +283,7 @@
                                                                     <option value="Legendary" {% if card.rarity == 'Legendary' %}selected{% endif %}>Legendary</option>
                                                                     <option value="Promo" {% if card.rarity == 'Promo' %}selected{% endif %}>Promo</option>
                                                                     <option value="Treasure" {% if card.rarity == 'Treasure' %}selected{% endif %}>Treasure</option>
+                                                                    <option value="Marvel" {% if card.rarity == 'Marvel' %}selected{% endif %}>Marvel</option>
                                                                 </select>
                                                             </div>
                                                             <div class="col-6">

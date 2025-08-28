@@ -59,41 +59,7 @@
                         <div class="col-sm-4"><strong>Condition:</strong></div>
                         <div class="col-sm-8">{{ card.condition }}</div>
                     </div>
-
-                    <div class="row mb-3">
-                        <div class="col-sm-4"><strong>Foiling:</strong></div>
-                        <div class="col-sm-8">
-                            {% if card.foiling == 'NF' %}
-                                <span class="badge bg-light text-dark">Non Foil</span>
-                            {% elif card.foiling == 'RF' %}
-                                <span class="badge bg-info">Rainbow Foil</span>
-                            {% elif card.foiling == 'CF' %}
-                                <span class="badge bg-primary">Cold Foil</span>
-                            {% else %}
-                                <span class="badge bg-secondary">{{ card.foiling }}</span>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <div class="row mb-3">
-                        <div class="col-sm-4"><strong>Art Style:</strong></div>
-                        <div class="col-sm-8">
-                            {% if card.art_style == 'normal' %}
-                                <span class="badge bg-light text-dark">Normal</span>
-                            {% elif card.art_style == 'EA' %}
-                                <span class="badge bg-success">Extended Art</span>
-                            {% elif card.art_style == 'WB' %}
-                                <span class="badge bg-warning text-dark">White Border</span>
-                            {% elif card.art_style == 'ALT' %}
-                                <span class="badge bg-danger">Alternate Art</span>
-                            {% elif card.art_style == 'GF' %}
-                                <span class="badge bg-warning">Golden</span>
-                            {% else %}
-                                <span class="badge bg-secondary">{{ card.art_style }}</span>
-                            {% endif %}
-                        </div>
-                    </div>
-
+                    
                     <div class="row mb-3">
                         <div class="col-sm-4"><strong>Price:</strong></div>
                         <div class="col-sm-8">

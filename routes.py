@@ -411,7 +411,12 @@ def upload_csv():
         
         # Show results
         if results['success'] > 0:
-            flash(f'Successfully imported {results["success"]} cards', 'success')
+            message_parts = []
+            if results.get('created', 0) > 0:
+                message_parts.append(f'created {results["created"]} new cards')
+            if results.get('updated', 0) > 0:
+                message_parts.append(f'updated {results["updated"]} existing cards')
+            flash(f'Successfully processed {results["success"]} cards ({", ".join(message_parts)})', 'success')
         
         if results['errors']:
             for error in results['errors'][:10]:  # Show first 10 errors
@@ -502,10 +507,10 @@ def download_sample_csv():
     """Download sample CSV template"""
     from flask import Response
     
-    sample_csv = """name,set_name,rarity,condition,price,quantity,description,image_url
-"Lightning Bolt","Core Set","Common","Near Mint",1.50,10,"Classic red instant spell","https://example.com/lightning-bolt.jpg"
-"Black Lotus","Alpha","Legendary","Light Play",5000.00,1,"The most powerful mox","https://example.com/black-lotus.jpg"
-"Counterspell","Beta","Common","Near Mint",25.00,5,"Counter target spell","https://example.com/counterspell.jpg"
+    sample_csv = """name,set_name,rarity,condition,price,quantity,description,image_url,foiling,art_style
+"Lightning Bolt","Core Set","Common","Near Mint",1.50,10,"Classic red instant spell","https://example.com/lightning-bolt.jpg","NF","normal"
+"Black Lotus","Alpha","Legendary","Light Play",5000.00,1,"The most powerful mox","https://example.com/black-lotus.jpg","NF","normal"
+"Counterspell","Beta","Common","Near Mint",25.00,5,"Counter target spell","https://example.com/counterspell.jpg","RF","EA"
 """
     
     return Response(
@@ -530,8 +535,8 @@ def download_inventory_csv():
     writer = csv.writer(output)
     
     # Write header (same format as sample CSV)
-    writer.writerow(['name', 'set_name', 'rarity', 'condition', 'price', 'quantity', 'description', 'image_url'])
-    
+    writer.writerow(['name', 'set_name', 'rarity', 'condition', 'price', 'quantity', 'description', 'image_url', 'foiling', 'art_style'])
+
     # Write card data
     for card in cards:
         writer.writerow([
@@ -542,7 +547,9 @@ def download_inventory_csv():
             card['price'],
             card['quantity'],
             card['description'],
-            card['image_url']
+            card['image_url'],
+            card['foiling'],
+            card['art_style']
         ])
     
     csv_content = output.getvalue()
@@ -605,6 +612,8 @@ def edit_card_form(card_id):
         card.condition = request.form.get('condition', card.condition)
         card.description = request.form.get('description', card.description)
         card.image_url = request.form.get('image_url', card.image_url)
+        card.foiling = request.form.get('foiling', card.foiling)
+        card.art_style = request.form.get('art_style', card.art_style)
         
         # Handle numeric fields with validation
         try:
@@ -679,7 +688,9 @@ def add_card_form():
             rarity=request.form.get('rarity', 'Common'),
             condition=request.form.get('condition', 'Near Mint'),
             description=request.form.get('description', ''),
-            image_url=request.form.get('image_url', '')
+            image_url=request.form.get('image_url', ''),
+            foiling=request.form.get('foiling', 'NF'),
+            art_style=request.form.get('art_style', 'normal')
         )
         
         # Handle numeric fields with validation

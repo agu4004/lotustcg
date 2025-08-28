@@ -3,6 +3,19 @@
 {% block title %}Admin Panel - The Lotus TCG{% endblock %}
 
 {% block content %}
+<style>
+.table-compact {
+    font-size: 12px;
+}
+.table-compact td {
+    padding: 0.25rem 0.5rem;
+    vertical-align: middle;
+}
+.table-compact .badge {
+    font-size: 10px;
+    padding: 0.2em 0.4em;
+}
+</style>
 <div class="container my-4">
     <div class="row">
         <div class="col-lg-8">
@@ -117,6 +130,18 @@
                                     <td>Direct link to card image</td>
                                     <td>https://example.com/card.jpg</td>
                                 </tr>
+                                <tr>
+                                    <td><code>foiling</code></td>
+                                    <td><span class="badge bg-warning">No</span></td>
+                                    <td>Card foiling type</td>
+                                    <td>NF, RF, CF</td>
+                                </tr>
+                                <tr>
+                                    <td><code>art_style</code></td>
+                                    <td><span class="badge bg-warning">No</span></td>
+                                    <td>Card art style</td>
+                                    <td>normal, EA, WB, ALT, GF</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -188,6 +213,24 @@
                                         <label for="add-image-url" class="form-label">Image URL</label>
                                         <input type="url" class="form-control" id="add-image-url" name="image_url" placeholder="https://example.com/card-image.jpg">
                                     </div>
+                                    <div class="col-md-6">
+                                        <label for="add-foiling" class="form-label">Foiling</label>
+                                        <select class="form-select" id="add-foiling" name="foiling">
+                                            <option value="NF">Non Foil (NF)</option>
+                                            <option value="RF">Rainbow Foil (RF)</option>
+                                            <option value="CF">Cold Foil (CF)</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="add-art-style" class="form-label">Art Style</label>
+                                        <select class="form-select" id="add-art-style" name="art_style">
+                                            <option value="normal">Normal</option>
+                                            <option value="EA">Extended Art (EA)</option>
+                                            <option value="WB">White Border (WB)</option>
+                                            <option value="ALT">Alternate Art (ALT)</option>
+                                            <option value="GF">Golden (GF)</option>
+                                        </select>
+                                    </div>
                                     <div class="col-md-12">
                                         <label for="add-description" class="form-label">Description</label>
                                         <textarea class="form-control" id="add-description" name="description" rows="2"></textarea>
@@ -206,17 +249,19 @@
                     <p class="text-muted mb-3">{{ cards|length }} card(s) in inventory</p>
                     <div class="table-responsive">
                             <div style="max-height: 600px; overflow-y: auto;">
-                                <table class="table table-hover">
+                                <table class="table table-hover table-compact">
                                     <thead>
                                         <tr>
-                                            <th width="60">Image</th>
-                                            <th>Name</th>
-                                            <th>Set</th>
-                                            <th>Rarity</th>
-                                            <th>Condition</th>
-                                            <th>Price</th>
-                                            <th>Quantity</th>
-                                            <th width="120">Actions</th>
+                                            <th width="50">Image</th>
+                                            <th width="150">Name</th>
+                                            <th width="80">Set</th>
+                                            <th width="70">Rarity</th>
+                                            <th width="80">Condition</th>
+                                            <th width="70">Foiling</th>
+                                            <th width="80">Art Style</th>
+                                            <th width="70">Price</th>
+                                            <th width="60">Qty</th>
+                                            <th width="100">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -225,12 +270,12 @@
                                             <td>
                                                 <div id="image-display-{{ card.id }}">
                                                     {% if card.image_url %}
-                                                    <img src="{{ card.image_url }}" alt="{{ card.name }}" 
-                                                         class="img-thumbnail" style="width: 50px; height: 70px; object-fit: cover;"
-                                                         onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNTAiIGhlaWdodD0iNzAiIHZpZXdCb3g9IjAgMCA1MCA3MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjUwIiBoZWlnaHQ9IjcwIiBmaWxsPSIjZjhmOWZhIi8+CjxwYXRoIGQ9Ik0yNSAzNWM1LjUyMyAwIDEwLTQuNDc3IDEwLTEwcy00LjQ3Ny0xMC0xMC0xMC0xMCA0LjQ3Ny0xMCAxMCA0LjQ3NyAxMCAxMCAxMHptMCAwdjE1bDE1LTEwLTE1LTV6IiBmaWxsPSIjZGVlMmU2Ii8+Cjwvc3ZnPgo=';">
+                                                    <img src="{{ card.image_url }}" alt="{{ card.name }}"
+                                                         class="img-thumbnail" style="width: 40px; height: 50px; object-fit: cover;"
+                                                         onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNTAiIHZpZXdCb3g9IjAgMCA0MCA1MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjUwIiBmaWxsPSIjZjhmOWZhIi8+CjxwYXRoIGQ9Ik0yMCAyNWMzLjMxNCAwIDYtMi42ODYgNi02cy0yLjY4Ni02LTYtNi02IDIuNjg2LTYgNiAyLjY4NiA2IDYgNnptMCAxMGwxMC03LTEwLTd6IiBmaWxsPSIjZGVlMmU2Ii8+Cjwvc3ZnPgo=';">
                                                     {% else %}
-                                                    <div class="bg-light border rounded d-flex align-items-center justify-content-center" 
-                                                         style="width: 50px; height: 70px; font-size: 12px; color: #6c757d;">
+                                                    <div class="bg-light border rounded d-flex align-items-center justify-content-center"
+                                                         style="width: 40px; height: 50px; font-size: 10px; color: #6c757d;">
                                                         No Image
                                                     </div>
                                                     {% endif %}
@@ -244,9 +289,9 @@
                                             </td>
                                             <td>
                                                 <div id="card-display-{{ card.id }}">
-                                                    <strong>{{ card.name }}</strong>
+                                                    <div class="fw-bold small">{{ card.name }}</div>
                                                     {% if card.description %}
-                                                    <br><small class="text-muted">{{ card.description[:100] }}{% if card.description|length > 100 %}...{% endif %}</small>
+                                                    <div class="text-muted" style="font-size: 11px; line-height: 1.2;">{{ card.description[:60] }}{% if card.description|length > 60 %}...{% endif %}</div>
                                                     {% endif %}
                                                 </div>
                                                 <div id="card-edit-{{ card.id }}" style="display: none;">
@@ -298,6 +343,24 @@
                                                                     <i class="fas fa-info-circle"></i> Paste a direct link to update the card image
                                                                 </small>
                                                             </div>
+                                                            <div class="col-6">
+                                                                <label class="form-label-sm text-muted fw-bold">Foiling</label>
+                                                                <select class="form-select form-select-sm" name="foiling">
+                                                                    <option value="NF" {% if card.foiling == 'NF' %}selected{% endif %}>Non Foil (NF)</option>
+                                                                    <option value="RF" {% if card.foiling == 'RF' %}selected{% endif %}>Rainbow Foil (RF)</option>
+                                                                    <option value="CF" {% if card.foiling == 'CF' %}selected{% endif %}>Cold Foil (CF)</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-6">
+                                                                <label class="form-label-sm text-muted fw-bold">Art Style</label>
+                                                                <select class="form-select form-select-sm" name="art_style">
+                                                                    <option value="normal" {% if card.art_style == 'normal' %}selected{% endif %}>Normal</option>
+                                                                    <option value="EA" {% if card.art_style == 'EA' %}selected{% endif %}>Extended Art (EA)</option>
+                                                                    <option value="WB" {% if card.art_style == 'WB' %}selected{% endif %}>White Border (WB)</option>
+                                                                    <option value="ALT" {% if card.art_style == 'ALT' %}selected{% endif %}>Alternate Art (ALT)</option>
+                                                                    <option value="GF" {% if card.art_style == 'GF' %}selected{% endif %}>Golden (GF)</option>
+                                                                </select>
+                                                            </div>
                                                             <div class="col-12">
                                                                 <label class="form-label-sm text-muted fw-bold">Description</label>
                                                                 <textarea class="form-control form-control-sm" name="description" rows="2" placeholder="Card description">{{ card.description }}</textarea>
@@ -317,25 +380,55 @@
                                                 </div>
                                             </td>
                                             <td>
-                                                <div id="set-display-{{ card.id }}">{{ card.set_name }}</div>
+                                                <div id="set-display-{{ card.id }}" style="font-size: 12px;">{{ card.set_name }}</div>
                                             </td>
                                             <td>
                                                 <div id="rarity-display-{{ card.id }}">
-                                                    <span class="badge bg-secondary">{{ card.rarity }}</span>
+                                                    <span class="badge bg-secondary" style="font-size: 10px;">{{ card.rarity }}</span>
                                                 </div>
                                             </td>
                                             <td>
-                                                <div id="condition-display-{{ card.id }}">{{ card.condition }}</div>
+                                                <div id="condition-display-{{ card.id }}" style="font-size: 12px;">{{ card.condition }}</div>
                                             </td>
                                             <td>
-                                                <div id="price-display-{{ card.id }}">${{ "{:,.0f}".format(card.price) }}</div>
-                                            </td>
-                                            <td>
-                                                <div id="quantity-display-{{ card.id }}">
-                                                    {% if card.quantity > 0 %}
-                                                        <span class="text-success">{{ card.quantity }}</span>
+                                                <div id="foiling-display-{{ card.id }}">
+                                                    {% if card.foiling == 'NF' %}
+                                                        <span class="badge bg-light text-dark" style="font-size: 10px;">NF</span>
+                                                    {% elif card.foiling == 'RF' %}
+                                                        <span class="badge bg-info" style="font-size: 10px;">RF</span>
+                                                    {% elif card.foiling == 'CF' %}
+                                                        <span class="badge bg-primary" style="font-size: 10px;">CF</span>
                                                     {% else %}
-                                                        <span class="text-danger">0</span>
+                                                        <span class="badge bg-secondary" style="font-size: 10px;">{{ card.foiling }}</span>
+                                                    {% endif %}
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div id="art-style-display-{{ card.id }}">
+                                                    {% if card.art_style == 'normal' %}
+                                                        <span class="badge bg-light text-dark" style="font-size: 10px;">Normal</span>
+                                                    {% elif card.art_style == 'EA' %}
+                                                        <span class="badge bg-success" style="font-size: 10px;">EA</span>
+                                                    {% elif card.art_style == 'WB' %}
+                                                        <span class="badge bg-warning text-dark" style="font-size: 10px;">WB</span>
+                                                    {% elif card.art_style == 'ALT' %}
+                                                        <span class="badge bg-danger" style="font-size: 10px;">ALT</span>
+                                                    {% elif card.art_style == 'GF' %}
+                                                        <span class="badge bg-warning" style="font-size: 10px;">GF</span>
+                                                    {% else %}
+                                                        <span class="badge bg-secondary" style="font-size: 10px;">{{ card.art_style }}</span>
+                                                    {% endif %}
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div id="price-display-{{ card.id }}" style="font-size: 12px; font-weight: bold;">${{ "{:,.0f}".format(card.price) }}</div>
+                                            </td>
+                                            <td>
+                                                <div id="quantity-display-{{ card.id }}" style="font-size: 12px;">
+                                                    {% if card.quantity > 0 %}
+                                                        <span class="text-success fw-bold">{{ card.quantity }}</span>
+                                                    {% else %}
+                                                        <span class="text-danger fw-bold">0</span>
                                                     {% endif %}
                                                 </div>
                                             </td>
@@ -588,10 +681,12 @@ function toggleEdit(cardId) {
     const setDisplay = document.getElementById(`set-display-${cardId}`);
     const rarityDisplay = document.getElementById(`rarity-display-${cardId}`);
     const conditionDisplay = document.getElementById(`condition-display-${cardId}`);
+    const foilingDisplay = document.getElementById(`foiling-display-${cardId}`);
+    const artStyleDisplay = document.getElementById(`art-style-display-${cardId}`);
     const priceDisplay = document.getElementById(`price-display-${cardId}`);
     const quantityDisplay = document.getElementById(`quantity-display-${cardId}`);
-    
-    [setDisplay, rarityDisplay, conditionDisplay, priceDisplay, quantityDisplay].forEach(el => {
+
+    [setDisplay, rarityDisplay, conditionDisplay, foilingDisplay, artStyleDisplay, priceDisplay, quantityDisplay].forEach(el => {
         if (el) {
             el.style.display = el.style.display === 'none' ? 'block' : 'none';
         }
