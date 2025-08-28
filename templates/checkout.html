@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}Checkout - The Lotus TCG{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header">
+                    <h4><i class="fas fa-shopping-cart me-2"></i>Checkout</h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST" id="checkout-form">
+                        <!-- Customer Information -->
+                        <div class="mb-4">
+                            <h5>Customer Information</h5>
+                            <div class="mb-3">
+                                <label for="customer_name" class="form-label">Full Name *</label>
+                                <input type="text" class="form-control" id="customer_name" name="customer_name" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="contact_number" class="form-label">Contact Number *</label>
+                                <input type="tel" class="form-control" id="contact_number" name="contact_number" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="facebook_details" class="form-label">Facebook Details (Optional)</label>
+                                <input type="text" class="form-control" id="facebook_details" name="facebook_details"
+                                       placeholder="Facebook name or link">
+                            </div>
+                        </div>
+
+                        <!-- Shipment Method -->
+                        <div class="mb-4">
+                            <h5>Shipment Method *</h5>
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="radio" name="shipment_method" value="shipping"
+                                       id="shipping" required>
+                                <label class="form-check-label" for="shipping">
+                                    <strong>Shipping</strong> - Deliver to your address
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="shipment_method" value="pickup"
+                                       id="pickup" required>
+                                <label class="form-check-label" for="pickup">
+                                    <strong>In-store Pickup</strong> - Collect from our store
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Shipping Address (shown only when shipping is selected) -->
+                        <div id="shipping-address-section" class="mb-4" style="display: none;">
+                            <h5>Shipping Address</h5>
+                            <div class="row g-3">
+                                <div class="col-12">
+                                    <label for="shipping_address" class="form-label">Street Address *</label>
+                                    <input type="text" class="form-control" id="shipping_address" name="shipping_address">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="shipping_city" class="form-label">City *</label>
+                                    <input type="text" class="form-control" id="shipping_city" name="shipping_city">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="shipping_province" class="form-label">Province/State *</label>
+                                    <input type="text" class="form-control" id="shipping_province" name="shipping_province">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="shipping_postal_code" class="form-label">Postal Code *</label>
+                                    <input type="text" class="form-control" id="shipping_postal_code" name="shipping_postal_code">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="shipping_country" class="form-label">Country</label>
+                                    <input type="text" class="form-control" id="shipping_country" name="shipping_country"
+                                           value="Vietnam">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Order Summary -->
+                        <div class="mb-4">
+                            <h5>Order Summary</h5>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Item</th>
+                                            <th>Qty</th>
+                                            <th>Price</th>
+                                            <th>Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for item in cart_items %}
+                                        <tr>
+                                            <td>{{ item.card.name }}</td>
+                                            <td>{{ item.quantity }}</td>
+                                            <td>{{ "{:,.0f}".format(item.card.price) }} VND</td>
+                                            <td>{{ "{:,.0f}".format(item.item_total) }} VND</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                    <tfoot>
+                                        <tr>
+                                            <th colspan="3">Total:</th>
+                                            <th>{{ "{:,.0f}".format(total_price) }} VND</th>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="d-flex gap-2 justify-content-between">
+                            <a href="{{ url_for('view_cart') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left me-2"></i>Back to Cart
+                            </a>
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-credit-card me-2"></i>Place Order
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const shippingRadio = document.getElementById('shipping');
+    const pickupRadio = document.getElementById('pickup');
+    const shippingAddressSection = document.getElementById('shipping-address-section');
+
+    // Shipping address fields
+    const shippingFields = [
+        'shipping_address',
+        'shipping_city',
+        'shipping_province',
+        'shipping_postal_code'
+    ];
+
+    function toggleShippingAddress() {
+        if (shippingRadio.checked) {
+            shippingAddressSection.style.display = 'block';
+            // Make address fields required
+            shippingFields.forEach(fieldId => {
+                const field = document.getElementById(fieldId);
+                field.required = true;
+            });
+        } else {
+            shippingAddressSection.style.display = 'none';
+            // Remove required attribute
+            shippingFields.forEach(fieldId => {
+                const field = document.getElementById(fieldId);
+                field.required = false;
+                field.value = ''; // Clear values
+            });
+        }
+    }
+
+    // Add event listeners
+    shippingRadio.addEventListener('change', toggleShippingAddress);
+    pickupRadio.addEventListener('change', toggleShippingAddress);
+
+    // Form validation
+    const form = document.getElementById('checkout-form');
+    form.addEventListener('submit', function(e) {
+        // Additional validation can be added here if needed
+        console.log('Form submitted');
+    });
+});
+</script>
+{% endblock %}

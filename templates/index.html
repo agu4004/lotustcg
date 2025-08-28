@@ -224,7 +224,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 // Hiển thị flash messages
                 if (data.flashed_messages && data.flashed_messages.length > 0) {
-                    const flashContainer = document.querySelector('.flash-messages-container');
+                    const flashContainer = document.querySelector('.flash-messages');
                     if (flashContainer) {
                         data.flashed_messages.forEach(flash => {
                             const alertDiv = document.createElement('div');
@@ -244,7 +244,7 @@ document.addEventListener('DOMContentLoaded', function() {
             })
             .catch(error => {
                 console.error('Error:', error);
-                const flashContainer = document.querySelector('.flash-messages-container');
+                const flashContainer = document.querySelector('.flash-messages');
                 if (flashContainer) {
                     const alertDiv = document.createElement('div');
                     alertDiv.className = 'alert alert-danger alert-dismissible fade show';

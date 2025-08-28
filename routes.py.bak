@@ -354,6 +354,51 @@ def download_sample_csv():
         headers={'Content-Disposition': 'attachment; filename=sample_cards.csv'}
     )
 
+@app.route('/admin/download_inventory_csv')
+@admin_required
+def download_inventory_csv():
+    """Download current inventory as CSV"""
+    from flask import Response
+    import csv
+    import io
+    
+    # Get all cards from inventory
+    cards = storage.get_all_cards()
+    
+    # Create CSV content
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write header (same format as sample CSV)
+    writer.writerow(['name', 'set_name', 'rarity', 'condition', 'price', 'quantity', 'description', 'image_url'])
+    
+    # Write card data
+    for card in cards:
+        writer.writerow([
+            card['name'],
+            card['set_name'],
+            card['rarity'],
+            card['condition'],
+            card['price'],
+            card['quantity'],
+            card['description'],
+            card['image_url']
+        ])
+    
+    csv_content = output.getvalue()
+    output.close()
+    
+    # Generate filename with timestamp
+    from datetime import datetime
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f'inventory_export_{timestamp}.csv'
+    
+    return Response(
+        csv_content,
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename={filename}'}
+    )
+
 # Error handlers
 @app.errorhandler(404)
 def not_found(error):

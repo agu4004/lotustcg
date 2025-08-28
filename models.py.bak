@@ -5,8 +5,7 @@ import os
 from datetime import datetime
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import String, Integer, Numeric, DateTime, Text, func, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy import String, Integer, Numeric, DateTime, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 # Import db from app - will be available after app initialization
@@ -69,84 +68,6 @@ class Card(db.Model):
     def __str__(self) -> str:
         """String representation of card"""
         return f"Card: {self.name} ({self.set_name}) - {self.price} VND"
-
-
-class Order(db.Model):
-    __tablename__ = "orders"
-
-    id: Mapped[str] = mapped_column(String(20), primary_key=True)  # e.g., ORD-20240101-001
-    customer_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    contact_number: Mapped[str] = mapped_column(String(20), nullable=False)
-    facebook_details: Mapped[str] = mapped_column(Text, nullable=True)
-    shipment_method: Mapped[str] = mapped_column(String(20), nullable=False)  # 'shipping' or 'pickup'
-    status: Mapped[str] = mapped_column(String(20), nullable=False, default='pending')
-    total_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
-
-    # Shipping address fields (required when shipment_method is 'shipping')
-    shipping_address: Mapped[str] = mapped_column(Text, nullable=True)
-    shipping_city: Mapped[str] = mapped_column(String(100), nullable=True)
-    shipping_province: Mapped[str] = mapped_column(String(100), nullable=True)
-    shipping_postal_code: Mapped[str] = mapped_column(String(20), nullable=True)
-    shipping_country: Mapped[str] = mapped_column(String(100), nullable=True, default='Vietnam')
-
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
-
-    # Relationship to order items
-    items = relationship('OrderItem', backref='order', lazy=True, cascade='all, delete-orphan')
-
-    def to_dict(self):
-        """Convert order to dictionary for templates"""
-        return {
-            'id': self.id,
-            'customer_name': self.customer_name,
-            'contact_number': self.contact_number,
-            'facebook_details': self.facebook_details,
-            'shipment_method': self.shipment_method,
-            'status': self.status,
-            'total_amount': float(self.total_amount),
-            'shipping_address': self.shipping_address,
-            'shipping_city': self.shipping_city,
-            'shipping_province': self.shipping_province,
-            'shipping_postal_code': self.shipping_postal_code,
-            'shipping_country': self.shipping_country,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None
-        }
-
-    def __str__(self) -> str:
-        """String representation of order"""
-        return f"Order: {self.id} - {self.customer_name} - {self.total_amount} VND"
-
-
-class OrderItem(db.Model):
-    __tablename__ = "order_items"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    order_id: Mapped[str] = mapped_column(String(20), ForeignKey('orders.id'), nullable=False)
-    card_id: Mapped[int] = mapped_column(Integer, ForeignKey('cards.id'), nullable=False)
-    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
-    unit_price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
-    total_price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
-
-    # Relationship to card
-    card = relationship('Card', backref='order_items')
-
-    def to_dict(self):
-        """Convert order item to dictionary for templates"""
-        return {
-            'id': self.id,
-            'order_id': self.order_id,
-            'card_id': self.card_id,
-            'quantity': self.quantity,
-            'unit_price': float(self.unit_price),
-            'total_price': float(self.total_price),
-            'card': self.card.to_dict() if self.card else None
-        }
-
-    def __str__(self) -> str:
-        """String representation of order item"""
-        return f"OrderItem: {self.card.name if self.card else 'Unknown Card'} x{self.quantity}"
 
 
 def initialize_default_users():

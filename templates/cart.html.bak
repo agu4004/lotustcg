@@ -99,12 +99,12 @@
                     </div>
                     
                     <div class="d-grid gap-2">
-                        <a href="{{ url_for('checkout') }}" class="btn btn-success btn-lg">
-                            <i class="fas fa-credit-card me-2"></i>Proceed to Checkout
-                        </a>
+                        <button class="btn btn-success btn-lg" disabled>
+                            <i class="fas fa-credit-card me-2"></i>Checkout
+                        </button>
                         <small class="text-muted text-center">
                             <i class="fas fa-info-circle me-1"></i>
-                            Complete your order by providing shipping and payment information
+                            Checkout functionality would be implemented here
                         </small>
                     </div>
                 </div>
