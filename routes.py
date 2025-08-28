@@ -3,7 +3,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import check_password_hash
 from app import app, db
 from storage_db import storage
-from models import User, Card
+from models import User, Card, Order, OrderItem
 from auth import admin_required, get_redirect_target
 from decimal import Decimal
 import logging
@@ -177,6 +177,166 @@ def clear_cart():
     session.pop('cart', None)
     flash('Cart cleared', 'info')
     return redirect(url_for('view_cart'))
+
+@app.route('/checkout', methods=['GET', 'POST'])
+def checkout():
+    """Checkout page - display form and process orders"""
+    # Check if cart is empty
+    cart = session.get('cart', {})
+    if not cart:
+        flash('Your cart is empty', 'warning')
+        return redirect(url_for('view_cart'))
+
+    if request.method == 'POST':
+        try:
+            # Validate required fields
+            customer_name = request.form.get('customer_name', '').strip()
+            contact_number = request.form.get('contact_number', '').strip()
+            shipment_method = request.form.get('shipment_method', '')
+
+            if not customer_name:
+                flash('Customer name is required', 'error')
+                return redirect(url_for('checkout'))
+
+            if not contact_number:
+                flash('Contact number is required', 'error')
+                return redirect(url_for('checkout'))
+
+            if shipment_method not in ['shipping', 'pickup']:
+                flash('Please select a valid shipment method', 'error')
+                return redirect(url_for('checkout'))
+
+            # Validate shipping address if shipping is selected
+            shipping_address = None
+            shipping_city = None
+            shipping_province = None
+            shipping_postal_code = None
+            shipping_country = None
+
+            if shipment_method == 'shipping':
+                shipping_address = request.form.get('shipping_address', '').strip()
+                shipping_city = request.form.get('shipping_city', '').strip()
+                shipping_province = request.form.get('shipping_province', '').strip()
+                shipping_postal_code = request.form.get('shipping_postal_code', '').strip()
+                shipping_country = request.form.get('shipping_country', 'Vietnam')
+
+                if not all([shipping_address, shipping_city, shipping_province, shipping_postal_code]):
+                    flash('All shipping address fields are required for shipping orders', 'error')
+                    return redirect(url_for('checkout'))
+
+            # Calculate order total and validate stock
+            cart_items = []
+            total_amount = 0
+
+            for card_id, quantity in cart.items():
+                card = Card.query.get(int(card_id))
+                if not card:
+                    flash(f'Card with ID {card_id} not found', 'error')
+                    return redirect(url_for('checkout'))
+
+                if quantity > card.quantity:
+                    flash(f'Insufficient stock for {card.name}. Only {card.quantity} available.', 'error')
+                    return redirect(url_for('checkout'))
+
+                item_total = float(card.price) * quantity
+                total_amount += item_total
+
+                cart_items.append({
+                    'card': card,
+                    'quantity': quantity,
+                    'unit_price': float(card.price),
+                    'total_price': item_total
+                })
+
+            # Generate order ID
+            import random
+            import string
+            from datetime import datetime
+
+            order_id = f"ORD-{datetime.now().strftime('%Y%m%d')}-{''.join(random.choices(string.digits, k=3))}"
+
+            # Create order
+            order = Order(
+                id=order_id,
+                customer_name=customer_name,
+                contact_number=contact_number,
+                facebook_details=request.form.get('facebook_details', ''),
+                shipment_method=shipment_method,
+                status='pending',
+                total_amount=total_amount,
+                shipping_address=shipping_address,
+                shipping_city=shipping_city,
+                shipping_province=shipping_province,
+                shipping_postal_code=shipping_postal_code,
+                shipping_country=shipping_country
+            )
+
+            db.session.add(order)
+
+            # Create order items and deduct stock
+            for item in cart_items:
+                order_item = OrderItem(
+                    order_id=order_id,
+                    card_id=item['card'].id,
+                    quantity=item['quantity'],
+                    unit_price=item['unit_price'],
+                    total_price=item['total_price']
+                )
+                db.session.add(order_item)
+
+                # Deduct stock
+                item['card'].quantity -= item['quantity']
+
+            # Commit transaction
+            db.session.commit()
+
+            # Clear cart
+            session.pop('cart', None)
+
+            flash(f'Order {order_id} placed successfully!', 'success')
+            return redirect(url_for('order_confirmation', order_id=order_id))
+
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Error processing order: {e}")
+            flash('An error occurred while processing your order. Please try again.', 'error')
+            return redirect(url_for('checkout'))
+
+    # GET request - display checkout form
+    cart_items = []
+    total_price = 0
+
+    for card_id, quantity in cart.items():
+        card = Card.query.get(int(card_id))
+        if card:
+            item_total = float(card.price) * quantity
+            cart_items.append({
+                'card': card,
+                'quantity': quantity,
+                'item_total': item_total
+            })
+            total_price += item_total
+
+    return render_template('checkout.html', cart_items=cart_items, total_price=total_price)
+
+@app.route('/order/<order_id>')
+def order_confirmation(order_id):
+    """Order confirmation page"""
+    order = Order.query.get_or_404(order_id)
+
+    # Get order items with card details
+    order_items = []
+    for item in order.items:
+        order_items.append({
+            'card': item.card,
+            'quantity': item.quantity,
+            'unit_price': float(item.unit_price),
+            'total_price': float(item.total_price)
+        })
+
+    return render_template('order_confirmation.html',
+                         order=order,
+                         order_items=order_items)
 
 # Authentication routes
 @app.route('/login', methods=['GET', 'POST'])
@@ -654,3 +814,87 @@ def list_flashed_messages():
             'message': message
         })
     return messages
+
+# Admin Order Management Routes
+@app.route('/admin/orders')
+@admin_required
+def admin_orders():
+    """Admin orders list page"""
+    orders = Order.query.order_by(Order.created_at.desc()).all()
+    return render_template('admin_orders.html', orders=orders)
+
+@app.route('/admin/orders/<order_id>')
+@admin_required
+def admin_order_detail(order_id):
+    """Admin order detail page"""
+    order = Order.query.get_or_404(order_id)
+
+    # Get order items with card details
+    order_items = []
+    for item in order.items:
+        order_items.append({
+            'card': item.card,
+            'quantity': item.quantity,
+            'unit_price': float(item.unit_price),
+            'total_price': float(item.total_price)
+        })
+
+    return render_template('admin_order_detail.html',
+                         order=order,
+                         order_items=order_items)
+
+@app.route('/admin/orders/<order_id>/fulfill', methods=['POST'])
+@admin_required
+def admin_fulfill_order(order_id):
+    """Fulfill an order"""
+    order = Order.query.get_or_404(order_id)
+
+    if order.status != 'pending':
+        flash('Only pending orders can be fulfilled', 'warning')
+        return redirect(url_for('admin_orders'))
+
+    try:
+        order.status = 'fulfilled'
+        order.updated_at = db.func.now()
+        db.session.commit()
+
+        flash(f'Order {order_id} has been fulfilled successfully', 'success')
+        logger.info(f"Order {order_id} fulfilled by admin")
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error fulfilling order: {str(e)}', 'error')
+        logger.error(f"Error fulfilling order {order_id}: {e}")
+
+    return redirect(url_for('admin_orders'))
+
+@app.route('/admin/orders/<order_id>/reject', methods=['POST'])
+@admin_required
+def admin_reject_order(order_id):
+    """Reject an order and restore stock"""
+    order = Order.query.get_or_404(order_id)
+
+    if order.status != 'pending':
+        flash('Only pending orders can be rejected', 'warning')
+        return redirect(url_for('admin_orders'))
+
+    try:
+        # Restore stock for all order items
+        for item in order.items:
+            if item.card:
+                item.card.quantity += item.quantity
+                logger.info(f"Restored {item.quantity} units of {item.card.name} (ID: {item.card.id})")
+
+        order.status = 'rejected'
+        order.updated_at = db.func.now()
+        db.session.commit()
+
+        flash(f'Order {order_id} has been rejected and stock restored', 'success')
+        logger.info(f"Order {order_id} rejected by admin - stock restored")
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error rejecting order: {str(e)}', 'error')
+        logger.error(f"Error rejecting order {order_id}: {e}")
+
+    return redirect(url_for('admin_orders'))

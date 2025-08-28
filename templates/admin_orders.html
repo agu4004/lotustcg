@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Order Management - The Lotus TCG{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-clipboard-list me-2"></i>Order Management</h2>
+                <a href="{{ url_for('admin') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Admin Panel
+                </a>
+            </div>
+
+            <!-- Order Statistics -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h3 class="text-primary">{{ orders|length }}</h3>
+                            <p class="text-muted mb-0">Total Orders</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h3 class="text-warning">{{ orders|selectattr('status', 'equalto', 'pending')|list|length }}</h3>
+                            <p class="text-muted mb-0">Pending Orders</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h3 class="text-success">{{ orders|selectattr('status', 'equalto', 'fulfilled')|list|length }}</h3>
+                            <p class="text-muted mb-0">Fulfilled Orders</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h3 class="text-danger">{{ orders|selectattr('status', 'equalto', 'rejected')|list|length }}</h3>
+                            <p class="text-muted mb-0">Rejected Orders</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Orders Table -->
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">All Orders</h5>
+                </div>
+                <div class="card-body">
+                    {% if orders %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Order ID</th>
+                                    <th>Date</th>
+                                    <th>Customer</th>
+                                    <th>Contact</th>
+                                    <th>Items</th>
+                                    <th>Total</th>
+                                    <th>Shipment</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for order in orders %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ order.id }}</strong>
+                                    </td>
+                                    <td>
+                                        {% if order.created_at %}
+                                        <div>{{ order.created_at.strftime('%b %d, %Y') }}</div>
+                                        <small class="text-muted">{{ order.created_at.strftime('%I:%M %p') }}</small>
+                                        {% else %}
+                                        <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div>{{ order.customer_name }}</div>
+                                        {% if order.facebook_details %}
+                                        <small class="text-muted">{{ order.facebook_details }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ order.contact_number }}</td>
+                                    <td>
+                                        <div>{{ order.items|length }} item(s)</div>
+                                        <small class="text-muted">
+                                            {% for item in order.items %}
+                                            {{ item.quantity }}x {{ item.card.name }}{% if not loop.last %}, {% endif %}
+                                            {% endfor %}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <strong>{{ "{:,.0f}".format(order.total_amount) }} VND</strong>
+                                    </td>
+                                    <td>
+                                        {% if order.shipment_method == 'shipping' %}
+                                        <i class="fas fa-truck text-primary" title="Shipping"></i>
+                                        {% else %}
+                                        <i class="fas fa-store text-success" title="In-store Pickup"></i>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if order.status == 'pending' %}
+                                        <span class="badge bg-warning">Pending</span>
+                                        {% elif order.status == 'fulfilled' %}
+                                        <span class="badge bg-success">Fulfilled</span>
+                                        {% elif order.status == 'rejected' %}
+                                        <span class="badge bg-danger">Rejected</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">{{ order.status.title() }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="{{ url_for('admin_order_detail', order_id=order.id) }}"
+                                               class="btn btn-outline-info btn-sm" title="View Details">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            {% if order.status == 'pending' %}
+                                            <form method="POST" action="{{ url_for('admin_fulfill_order', order_id=order.id) }}"
+                                                  class="d-inline">
+                                                <button type="submit" class="btn btn-outline-success btn-sm"
+                                                        title="Fulfill Order" onclick="return confirm('Mark this order as fulfilled?')">
+                                                    <i class="fas fa-check"></i>
+                                                </button>
+                                            </form>
+                                            <form method="POST" action="{{ url_for('admin_reject_order', order_id=order.id) }}"
+                                                  class="d-inline">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm"
+                                                        title="Reject Order" onclick="return confirm('Reject this order and restore stock?')">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            </form>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-clipboard-list display-1 text-muted mb-3"></i>
+                        <h5>No Orders Found</h5>
+                        <p class="text-muted">Orders will appear here once customers start placing them.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add any client-side functionality here if needed
+    console.log('Admin orders page loaded');
+});
+</script>
+{% endblock %}
