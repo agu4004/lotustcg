@@ -14,8 +14,9 @@ logger = logging.getLogger(__name__)
 def index():
     """Home page with featured cards"""
     cards = storage.get_all_cards()
-    # Show first 6 cards as featured
-    featured_cards = cards[:6] if cards else []
+    # Filter out out-of-stock cards and show first 6 as featured
+    in_stock_cards = [card for card in cards if card.get('quantity', 0) > 0]
+    featured_cards = in_stock_cards[:6] if in_stock_cards else []
     return render_template('index.html', featured_cards=featured_cards, total_cards=len(cards))
 
 @app.route('/catalog')
@@ -51,13 +52,22 @@ def catalog():
         min_price=min_price,
         max_price=max_price
     )
-    
+
+    # Separate in-stock and out-of-stock cards
+    in_stock_cards = [card for card in cards if card.get('quantity', 0) > 0]
+    out_of_stock_cards = [card for card in cards if card.get('quantity', 0) == 0]
+
+    # Combine with in-stock cards first, then out-of-stock cards
+    sorted_cards = in_stock_cards + out_of_stock_cards
+
     # Get filter options
     all_sets = storage.get_unique_sets()
     all_rarities = storage.get_unique_rarities()
-    
-    return render_template('catalog.html', 
-                         cards=cards, 
+
+    return render_template('catalog.html',
+                         cards=sorted_cards,
+                         in_stock_count=len(in_stock_cards),
+                         out_of_stock_count=len(out_of_stock_cards),
                          all_sets=all_sets,
                          all_rarities=all_rarities,
                          current_filters={

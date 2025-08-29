@@ -82,7 +82,16 @@
             <!-- Results Header -->
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h2>Card Catalog</h2>
-                <span class="text-muted">{{ cards|length }} card(s) found</span>
+                <div class="text-end">
+                    <span class="text-muted">{{ cards|length }} card(s) found</span>
+                    {% if in_stock_count is defined and out_of_stock_count is defined %}
+                    <br>
+                    <small class="text-success">{{ in_stock_count }} in stock</small>
+                    {% if out_of_stock_count > 0 %}
+                    <small class="text-muted"> • {{ out_of_stock_count }} out of stock</small>
+                    {% endif %}
+                    {% endif %}
+                </div>
             </div>
             
             <!-- Active Filters -->
@@ -105,12 +114,33 @@
             <!-- Cards Grid -->
             {% if cards %}
             <div class="row">
+                {% set in_stock_shown = false %}
                 {% for card in cards %}
+                {% if card.quantity == 0 and in_stock_shown %}
+                <!-- Separator for out-of-stock cards -->
+                <div class="col-12">
+                    <hr class="my-4">
+                    <div class="text-center mb-4">
+                        <h5 class="text-muted">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Out of Stock Items
+                        </h5>
+                        <p class="text-muted small">These cards are currently unavailable but may be restocked soon.</p>
+                    </div>
+                </div>
+                {% set in_stock_shown = false %}
+                {% endif %}
+                {% if card.quantity > 0 %}
+                {% set in_stock_shown = true %}
+                {% endif %}
                 <div class="col-xl-4 col-lg-6 col-md-6 mb-4">
-                    <div class="card h-100">
+                    <div class="card h-100{% if card.quantity == 0 %} border-warning{% endif %}">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <strong class="text-truncate me-2">{{ card.name }}</strong>
                             <span class="badge bg-secondary">{{ card.rarity }}</span>
+                            {% if card.quantity == 0 %}
+                            <span class="badge bg-warning text-dark ms-1">Out of Stock</span>
+                            {% endif %}
                         </div>
                         <div class="card-body">
                             <div class="text-center mb-3">
