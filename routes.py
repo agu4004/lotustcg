@@ -26,7 +26,8 @@ def catalog():
     query = request.args.get('q', '').strip()
     set_filter = request.args.get('set', '')
     rarity_filter = request.args.get('rarity', '')
-    
+    foiling_filter = request.args.get('foiling', '')
+
     # Price range filters
     min_price = None
     max_price = None
@@ -36,47 +37,122 @@ def catalog():
             min_price = float(min_price_str)
     except (ValueError, TypeError):
         pass
-    
+
     try:
         max_price_str = request.args.get('max_price')
         if max_price_str:
             max_price = float(max_price_str)
     except (ValueError, TypeError):
         pass
-    
+
+    # Get pagination parameters
+    try:
+        page = int(request.args.get('page', 1))
+        if page < 1:
+            page = 1
+    except (ValueError, TypeError):
+        page = 1
+
+    per_page = 30
+
+    # Get sort parameter
+    sort_by = request.args.get('sort', 'name_asc')
+
     # Search cards
     cards = storage.search_cards(
         query=query,
         set_filter=set_filter,
         rarity_filter=rarity_filter,
+        foiling_filter=foiling_filter,
         min_price=min_price,
         max_price=max_price
     )
 
-    # Separate in-stock and out-of-stock cards
+    # Apply sorting before separating in-stock/out-of-stock
+    if sort_by == 'name_asc':
+        cards.sort(key=lambda x: x.get('name', '').lower())
+    elif sort_by == 'name_desc':
+        cards.sort(key=lambda x: x.get('name', '').lower(), reverse=True)
+    elif sort_by == 'price_asc':
+        cards.sort(key=lambda x: float(x.get('price', 0)))
+    elif sort_by == 'price_desc':
+        cards.sort(key=lambda x: float(x.get('price', 0)), reverse=True)
+
+    # Separate in-stock and out-of-stock cards (preserving sort order)
     in_stock_cards = [card for card in cards if card.get('quantity', 0) > 0]
     out_of_stock_cards = [card for card in cards if card.get('quantity', 0) == 0]
 
     # Combine with in-stock cards first, then out-of-stock cards
     sorted_cards = in_stock_cards + out_of_stock_cards
 
+    # Calculate pagination
+    total_cards = len(sorted_cards)
+    total_pages = (total_cards + per_page - 1) // per_page  # Ceiling division
+
+    # Ensure page is within valid range
+    if page > total_pages and total_pages > 0:
+        page = total_pages
+
+    # Get cards for current page
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    page_cards = sorted_cards[start_idx:end_idx]
+
     # Get filter options
     all_sets = storage.get_unique_sets()
     all_rarities = storage.get_unique_rarities()
+    all_foilings = storage.get_unique_foilings()
+
+    # Calculate pagination info
+    has_prev = page > 1
+    has_next = page < total_pages
+    prev_page = page - 1 if has_prev else None
+    next_page = page + 1 if has_next else None
+
+    # Generate page numbers for pagination control
+    page_numbers = []
+    if total_pages <= 7:
+        page_numbers = list(range(1, total_pages + 1))
+    else:
+        if page <= 4:
+            page_numbers = [1, 2, 3, 4, 5, '...', total_pages]
+        elif page >= total_pages - 3:
+            page_numbers = [1, '...', total_pages - 4, total_pages - 3, total_pages - 2, total_pages - 1, total_pages]
+        else:
+            page_numbers = [1, '...', page - 1, page, page + 1, '...', total_pages]
+
+    # Calculate display range for template
+    start_display = ((page - 1) * per_page) + 1
+    end_display = min(page * per_page, total_cards)
 
     return render_template('catalog.html',
-                         cards=sorted_cards,
+                         cards=page_cards,
                          in_stock_count=len(in_stock_cards),
                          out_of_stock_count=len(out_of_stock_cards),
                          all_sets=all_sets,
                          all_rarities=all_rarities,
+                         all_foilings=all_foilings,
                          current_filters={
                              'q': query,
                              'set': set_filter,
                              'rarity': rarity_filter,
+                             'foiling': foiling_filter,
                              'min_price': request.args.get('min_price', ''),
-                             'max_price': request.args.get('max_price', '')
-                         })
+                             'max_price': request.args.get('max_price', ''),
+                             'sort': sort_by
+                         },
+                         # Pagination data
+                         page=page,
+                         per_page=per_page,
+                         total_cards=total_cards,
+                         total_pages=total_pages,
+                         has_prev=has_prev,
+                         has_next=has_next,
+                         prev_page=prev_page,
+                         next_page=next_page,
+                         page_numbers=page_numbers,
+                         start_display=start_display,
+                         end_display=end_display)
 
 @app.route('/card/<card_id>')
 def card_detail(card_id):
