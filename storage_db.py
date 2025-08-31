@@ -69,8 +69,8 @@ class DatabaseStorage:
         cards = Card.query.filter(Card.is_deleted == False).all()
         return [card.to_dict() for card in cards]
     
-    def search_cards(self, query: str = "", set_filter: str = "", rarity_filter: str = "", 
-                    min_price: Optional[float] = None, max_price: Optional[float] = None) -> List[Dict[str, Any]]:
+    def search_cards(self, query: str = "", set_filter: str = "", rarity_filter: str = "",
+                    foiling_filter: str = "", min_price: Optional[float] = None, max_price: Optional[float] = None) -> List[Dict[str, Any]]:
         """Search cards with filters"""
         from models import Card
         # Start with base query
@@ -90,7 +90,11 @@ class DatabaseStorage:
         # Rarity filter
         if rarity_filter:
             filters.append(Card.rarity == rarity_filter)
-        
+
+        # Foiling filter
+        if foiling_filter:
+            filters.append(Card.foiling == foiling_filter)
+
         # Price range filters
         if min_price is not None:
             filters.append(Card.price >= min_price)
@@ -117,6 +121,12 @@ class DatabaseStorage:
         """Get unique rarities from non-deleted cards"""
         from models import Card
         result = db.session.query(Card.rarity).filter(Card.is_deleted == False).distinct().all()
+        return [row[0] for row in result if row[0]]
+
+    def get_unique_foilings(self) -> List[str]:
+        """Get unique foiling types from non-deleted cards"""
+        from models import Card
+        result = db.session.query(Card.foiling).filter(Card.is_deleted == False).distinct().all()
         return [row[0] for row in result if row[0]]
     
     def update_card_quantity(self, card_id: str, new_quantity: int) -> bool:

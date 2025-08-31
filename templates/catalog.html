@@ -14,7 +14,7 @@
                     </h5>
                 </div>
                 <div class="card-body">
-                    <form method="GET" action="{{ url_for('catalog') }}">
+                    <form method="GET" action="{{ url_for('catalog', page=1) }}">
                         <!-- Search -->
                         <div class="mb-3">
                             <label for="q" class="form-label">Card Name</label>
@@ -42,9 +42,31 @@
                             <select class="form-select" id="rarity" name="rarity">
                                 <option value="">All Rarities</option>
                                 {% for rarity in all_rarities %}
-                                <option value="{{ rarity }}" 
+                                <option value="{{ rarity }}"
                                         {% if current_filters.rarity == rarity %}selected{% endif %}>
                                     {{ rarity }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- Foiling Filter -->
+                        <div class="mb-3">
+                            <label for="foiling" class="form-label">Foiling</label>
+                            <select class="form-select" id="foiling" name="foiling">
+                                <option value="">All Foiling Types</option>
+                                {% for foiling in all_foilings %}
+                                <option value="{{ foiling }}"
+                                        {% if current_filters.foiling == foiling %}selected{% endif %}>
+                                    {% if foiling == 'NF' %}
+                                        Non Foil
+                                    {% elif foiling == 'RF' %}
+                                        Rainbow Foil
+                                    {% elif foiling == 'CF' %}
+                                        Cold Foil
+                                    {% else %}
+                                        {{ foiling }}
+                                    {% endif %}
                                 </option>
                                 {% endfor %}
                             </select>
@@ -69,7 +91,7 @@
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-search me-2"></i>Search
                             </button>
-                            <a href="{{ url_for('catalog') }}" class="btn btn-outline-secondary">
+                            <a href="{{ url_for('catalog', page=1, sort='name_asc') }}" class="btn btn-outline-secondary">
                                 <i class="fas fa-times me-2"></i>Clear Filters
                             </a>
                         </div>
@@ -83,7 +105,16 @@
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h2>Card Catalog</h2>
                 <div class="text-end">
-                    <span class="text-muted">{{ cards|length }} card(s) found</span>
+                    <span class="text-muted">
+                        {% if total_cards %}
+                            Showing {{ start_display }} - {{ end_display }} of {{ total_cards }} card(s)
+                            {% if total_pages > 1 %}
+                                (Page {{ page }} of {{ total_pages }})
+                            {% endif %}
+                        {% else %}
+                            {{ cards|length }} card(s) found
+                        {% endif %}
+                    </span>
                     {% if in_stock_count is defined and out_of_stock_count is defined %}
                     <br>
                     <small class="text-success">{{ in_stock_count }} in stock</small>
@@ -93,12 +124,38 @@
                     {% endif %}
                 </div>
             </div>
-            
+
+            <!-- Sort Dropdown -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <form method="GET" action="{{ url_for('catalog', page=1) }}" class="d-inline">
+                        <input type="hidden" name="q" value="{{ current_filters.q }}">
+                        <input type="hidden" name="set" value="{{ current_filters.set }}">
+                        <input type="hidden" name="rarity" value="{{ current_filters.rarity }}">
+                        <input type="hidden" name="foiling" value="{{ current_filters.foiling }}">
+                        <input type="hidden" name="min_price" value="{{ current_filters.min_price }}">
+                        <input type="hidden" name="max_price" value="{{ current_filters.max_price }}">
+                        <div class="input-group">
+                            <label class="input-group-text" for="sort">
+                                <i class="fas fa-sort me-1"></i>Sort by
+                            </label>
+                            <select class="form-select" id="sort" name="sort" onchange="this.form.submit()">
+                                <option value="name_asc" {% if current_filters.sort == 'name_asc' %}selected{% endif %}>Name (A-Z)</option>
+                                <option value="name_desc" {% if current_filters.sort == 'name_desc' %}selected{% endif %}>Name (Z-A)</option>
+                                <option value="price_asc" {% if current_filters.sort == 'price_asc' %}selected{% endif %}>Price (Low to High)</option>
+                                <option value="price_desc" {% if current_filters.sort == 'price_desc' %}selected{% endif %}>Price (High to Low)</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             <!-- Active Filters -->
             {% set active_filters = [] %}
             {% if current_filters.q %}{% set _ = active_filters.append(('Search', current_filters.q)) %}{% endif %}
             {% if current_filters.set %}{% set _ = active_filters.append(('Set', current_filters.set)) %}{% endif %}
             {% if current_filters.rarity %}{% set _ = active_filters.append(('Rarity', current_filters.rarity)) %}{% endif %}
+            {% if current_filters.foiling %}{% set _ = active_filters.append(('Foiling', current_filters.foiling)) %}{% endif %}
             {% if current_filters.min_price %}{% set _ = active_filters.append(('Min Price', 'VND' + current_filters.min_price)) %}{% endif %}
             {% if current_filters.max_price %}{% set _ = active_filters.append(('Max Price', 'VND' + current_filters.max_price)) %}{% endif %}
             
@@ -225,12 +282,70 @@
                 </div>
                 {% endfor %}
             </div>
+
+            <!-- Pagination Controls -->
+            {% if total_pages > 1 %}
+            <nav aria-label="Card catalog pagination" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    <!-- Previous Button -->
+                    {% if has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('catalog', page=prev_page, q=current_filters.q, set=current_filters.set, rarity=current_filters.rarity, foiling=current_filters.foiling, min_price=current_filters.min_price, max_price=current_filters.max_price, sort=current_filters.sort) }}" aria-label="Previous">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">&laquo;</span>
+                    </li>
+                    {% endif %}
+
+                    <!-- Page Numbers -->
+                    {% for page_num in page_numbers %}
+                    {% if page_num == '...' %}
+                    <li class="page-item disabled">
+                        <span class="page-link">...</span>
+                    </li>
+                    {% elif page_num == page %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ page_num }}</span>
+                    </li>
+                    {% else %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('catalog', page=page_num, q=current_filters.q, set=current_filters.set, rarity=current_filters.rarity, foiling=current_filters.foiling, min_price=current_filters.min_price, max_price=current_filters.max_price, sort=current_filters.sort) }}">{{ page_num }}</a>
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+
+                    <!-- Next Button -->
+                    {% if has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('catalog', page=next_page, q=current_filters.q, set=current_filters.set, rarity=current_filters.rarity, foiling=current_filters.foiling, min_price=current_filters.min_price, max_price=current_filters.max_price, sort=current_filters.sort) }}" aria-label="Next">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">&raquo;</span>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+
+            <!-- Pagination Info -->
+            <div class="text-center mt-2">
+                <small class="text-muted">
+                    Page {{ page }} of {{ total_pages }} • {{ per_page }} items per page
+                </small>
+            </div>
+            {% endif %}
+
             {% else %}
             <div class="text-center py-5">
                 <i class="fas fa-search display-1 text-muted mb-4"></i>
                 <h4>No Cards Found</h4>
                 <p class="text-muted">Try adjusting your search criteria or browse all available cards.</p>
-                <a href="{{ url_for('catalog') }}" class="btn btn-outline-primary">
+                <a href="{{ url_for('catalog', page=1, sort='name_asc') }}" class="btn btn-outline-primary">
                     <i class="fas fa-list me-2"></i>Show All Cards
                 </a>
             </div>
