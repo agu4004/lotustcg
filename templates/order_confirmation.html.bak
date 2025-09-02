@@ -99,7 +99,7 @@
                             <thead>
                                 <tr>
                                     <th>Item</th>
-                                    <th class="text-center">Quantity</th>
+                                    <th>Quantity</th>
                                     <th>Unit Price</th>
                                     <th>Total</th>
                                 </tr>
@@ -124,7 +124,7 @@
                                             </div>
                                         </div>
                                     </td>
-                                    <td class="text-center">{{ item.quantity }}</td>
+                                    <td>{{ item.quantity }}</td>
                                     <td>{{ "{:,.0f}".format(item.unit_price) }} VND</td>
                                     <td><strong>{{ "{:,.0f}".format(item.total_price) }} VND</strong></td>
                                 </tr>
@@ -138,17 +138,6 @@
                             </tfoot>
                         </table>
                     </div>
-                </div>
-            </div>
-
-            <!-- Payment -->
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-credit-card me-2"></i>Payment</h5>
-                </div>
-                <div class="card-body text-center">
-                    <p>Please scan the QR code below to complete your payment:</p>
-                    <img src="https://img.vietqr.io/image/vietinbank-107000809557-compact.png?amount={{ order.total_amount }}&addInfo={{ order.id }}&accountName=thelotustcg" alt="Payment QR Code" class="img-fluid">
                 </div>
             </div>
 
