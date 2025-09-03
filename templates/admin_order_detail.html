@@ -146,7 +146,7 @@
                                     <thead>
                                         <tr>
                                             <th>Item</th>
-                                            <th class="text-center">Quantity</th>
+                                            <th>Quantity</th>
                                             <th>Unit Price</th>
                                             <th>Total</th>
                                         </tr>
@@ -171,7 +171,7 @@
                                                     </div>
                                                 </div>
                                             </td>
-                                            <td class="text-center">{{ item.quantity }}</td>
+                                            <td>{{ item.quantity }}</td>
                                             <td>{{ "{:,.0f}".format(item.unit_price) }} VND</td>
                                             <td><strong>{{ "{:,.0f}".format(item.total_price) }} VND</strong></td>
                                         </tr>

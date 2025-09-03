@@ -104,15 +104,8 @@ class Order(db.Model):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
-    # Coupon-related fields
-    coupon_id: Mapped[int] = mapped_column(Integer, ForeignKey('coupons.id'), nullable=True)
-    coupon_code: Mapped[str] = mapped_column(String(20), nullable=True)  # Store coupon code at time of order
-    discount_amount: Mapped[float] = mapped_column(Numeric(10, 2), default=0.0, nullable=False)  # Discount applied
-    discounted_total: Mapped[float] = mapped_column(Numeric(10, 2), nullable=True)  # Final total after discount
-
     # Relationship to order items
     items = relationship('OrderItem', backref='order', lazy=True, cascade='all, delete-orphan')
-    coupon = relationship('Coupon')  # Relationship to applied coupon
 
     def to_dict(self):
         """Convert order to dictionary for templates"""
@@ -125,10 +118,6 @@ class Order(db.Model):
             'pickup_location': self.pickup_location,
             'status': self.status,
             'total_amount': float(self.total_amount),
-            'discount_amount': float(self.discount_amount),
-            'discounted_total': float(self.discounted_total) if self.discounted_total else float(self.total_amount),
-            'coupon_code': self.coupon_code,
-            'coupon': self.coupon.to_dict() if self.coupon else None,
             'shipping_address': self.shipping_address,
             'shipping_city': self.shipping_city,
             'shipping_province': self.shipping_province,
