@@ -232,51 +232,51 @@ class DatabaseStorage:
     def process_csv_upload(self, csv_content: str) -> Dict[str, Any]:
         """Process CSV upload and return results"""
         results = {'success': 0, 'created': 0, 'updated': 0, 'errors': [], 'total': 0}
-        
+
         if not csv_content.strip():
             results['errors'].append('Empty CSV content')
             return results
-        
+
         try:
             csv_file = io.StringIO(csv_content)
             reader = csv.DictReader(csv_file)
-            
+
             # Check if CSV has headers
             if not reader.fieldnames:
                 results['errors'].append('CSV must have headers')
                 return results
-            
+
             row_num = 1  # Start from 1 for header
             for row in reader:
                 row_num += 1
                 results['total'] += 1
-                
+
                 try:
                     # Validate required fields
                     name = row.get('name', '').strip()
                     if not name:
                         results['errors'].append(f'Row {row_num}: missing card name')
                         continue
-                    
+
                     # Parse price
                     try:
                         price = float(row.get('price', 0))
                     except (ValueError, TypeError):
                         results['errors'].append(f'Row {row_num}: invalid price "{row.get("price", "")}"')
                         continue
-                    
+
                     # Parse quantity
                     try:
                         quantity = int(row.get('quantity', 0))
                     except (ValueError, TypeError):
                         results['errors'].append(f'Row {row_num}: invalid quantity "{row.get("quantity", "")}"')
-                        
+
                     image_url = None
                     for k in _IMAGE_URL_KEYS:
                         if row.get(k):
                             image_url = row[k]
                             break
-                    
+
                     # Create card data
                     card_data = {
                         'name': name,
@@ -315,14 +315,176 @@ class DatabaseStorage:
                         self.add_card(card_data)
                         results['success'] += 1
                         results['created'] += 1
-                    
+
                 except Exception as e:
                     results['errors'].append(f'Row {row_num}: {str(e)}')
                     continue
-            
+
         except Exception as e:
             results['errors'].append(f'CSV parsing error: {str(e)}')
-        
+
+        return results
+
+    def process_user_inventory_csv_upload(self, csv_content: str, user_id: int) -> Dict[str, Any]:
+        """Process CSV upload for user inventory and return results"""
+        from models import UserInventory, InventoryItem, Card
+
+        results = {'success': 0, 'created': 0, 'updated': 0, 'errors': [], 'total': 0}
+
+        if not csv_content.strip():
+            results['errors'].append('Empty CSV content')
+            return results
+
+        try:
+            # Get or create user's inventory
+            user_inventory = UserInventory.query.filter_by(user_id=user_id).first()
+            if not user_inventory:
+                user_inventory = UserInventory(user=user_id, is_public=False)
+                db.session.add(user_inventory)
+                db.session.commit()
+
+            csv_file = io.StringIO(csv_content)
+            reader = csv.DictReader(csv_file)
+
+            # Check if CSV has headers
+            if not reader.fieldnames:
+                results['errors'].append('CSV must have headers')
+                return results
+
+            row_num = 1  # Start from 1 for header
+            for row in reader:
+                row_num += 1
+                results['total'] += 1
+
+                try:
+                    # Validate required fields
+                    name = row.get('name', '').strip()
+                    if not name:
+                        results['errors'].append(f'Row {row_num}: missing card name')
+                        continue
+
+                    # Parse quantity
+                    try:
+                        quantity = int(row.get('quantity', 1))
+                        if quantity <= 0:
+                            results['errors'].append(f'Row {row_num}: quantity must be greater than 0')
+                            continue
+                        elif quantity > 1000:
+                            results['errors'].append(f'Row {row_num}: quantity cannot exceed 1000')
+                            continue
+                    except (ValueError, TypeError):
+                        results['errors'].append(f'Row {row_num}: invalid quantity "{row.get("quantity", "")}"')
+                        continue
+
+                    # Note: sale_price field has been removed from the model
+
+                    # Validate condition
+                    valid_conditions = ['Near Mint', 'Light Play', 'Moderate Play', 'Heavy Play', 'Damaged']
+                    condition = row.get('condition', 'Near Mint').strip()
+                    if condition not in valid_conditions:
+                        results['errors'].append(f'Row {row_num}: invalid condition "{condition}". Must be one of: {", ".join(valid_conditions)}')
+                        continue
+
+                    # Validate language
+                    valid_languages = ['English', 'Not English']
+                    language = row.get('language', 'English').strip()
+                    if language and language not in valid_languages:
+                        results['errors'].append(f'Row {row_num}: invalid language "{language}". Must be one of: {", ".join(valid_languages)}')
+                        continue
+
+                    # Parse market price - this will be the fixed price for the card
+                    try:
+                        market_price = float(row.get('market_price', 0) or 0)
+                        if market_price <= 0:
+                            results['errors'].append(f'Row {row_num}: market_price must be greater than 0')
+                            continue
+                    except (ValueError, TypeError):
+                        results['errors'].append(f'Row {row_num}: invalid market_price "{row.get("market_price", "")}"')
+                        continue
+
+                    # Check if card exists, if not create it
+                    card = Card.query.filter_by(name=name).first()
+                    if not card:
+                        card = Card(
+                            name=name,
+                            set_name=row.get('set_name', 'Unknown').strip(),
+                            rarity=row.get('rarity', 'Common').strip(),
+                            condition=condition,
+                            price=market_price,  # Always use market price
+                            quantity=0,  # User inventory doesn't affect admin stock
+                            description=row.get('description', '').strip(),
+                            image_url=row.get('image_url', '').strip(),
+                            foiling=row.get('foiling', 'NF').strip(),
+                            art_style=row.get('art_style', 'normal').strip()
+                        )
+                        db.session.add(card)
+                        db.session.commit()
+                        logger.debug(f"Created new card: {name} with market price: {market_price}")
+                    else:
+                        # Update existing card's price to match market price
+                        if float(card.price) != market_price:
+                            old_price = card.price
+                            card.price = market_price
+                            logger.debug(f"Updated card {name} price from {old_price} to {market_price} (market price)")
+
+                    # Check if user already has this card in their inventory
+                    existing_item = InventoryItem.query.filter_by(
+                        inventory_id=user_inventory.id,
+                        card_id=card.id
+                    ).first()
+
+                    if existing_item:
+                        # Update existing item
+                        existing_item.quantity += quantity
+                        existing_item.condition = condition
+                        existing_item.language = language
+                        if row.get('notes'):
+                            existing_item.notes = row.get('notes').strip()
+                        if row.get('grade'):
+                            existing_item.grade = row.get('grade').strip()
+                        if row.get('foil_type'):
+                            existing_item.foil_type = row.get('foil_type').strip()
+                        existing_item.updated_at = db.func.now()
+
+                        # Ensure card price is fixed to market price
+                        if float(card.price) != market_price:
+                            old_price = card.price
+                            card.price = market_price
+                            logger.debug(f"Updated existing card {name} price from {old_price} to {market_price} (market price)")
+
+                        results['success'] += 1
+                        results['updated'] += 1
+                        logger.debug(f"Updated existing inventory item: {name} - Added {quantity} to existing quantity")
+                    else:
+                        # Create new inventory item
+                        inventory_item = InventoryItem(
+                            inventory_id=user_inventory.id,
+                            card_id=card.id,
+                            quantity=quantity,
+                            condition=condition,
+                            is_verified=False,  # New items need verification
+                            notes=row.get('notes', '').strip(),
+                            grade=row.get('grade', '').strip(),
+                            language=language,
+                            foil_type=row.get('foil_type', '').strip()
+                        )
+                        db.session.add(inventory_item)
+
+                        results['success'] += 1
+                        results['created'] += 1
+                        logger.debug(f"Created new inventory item: {name} x{quantity}")
+
+                except Exception as e:
+                    results['errors'].append(f'Row {row_num}: {str(e)}')
+                    continue
+
+            db.session.commit()
+
+        except Exception as e:
+            db.session.rollback()
+            results['errors'].append(f'CSV parsing error: {str(e)}')
+            logger.error(f"Error processing user inventory CSV: {e}")
+
         return results
 
 
