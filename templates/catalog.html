@@ -194,11 +194,31 @@
                     <div class="card h-100{% if card.quantity == 0 %} border-warning{% endif %}">
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <strong class="text-truncate me-2">{{ card.name }}</strong>
-                            <span class="badge bg-secondary">{{ card.rarity }}</span>
-                            {% if card.quantity == 0 %}
-                            <span class="badge bg-warning text-dark ms-1">Out of Stock</span>
-                            {% endif %}
+                            <div class="d-flex gap-1">
+                                <span class="badge bg-secondary">{{ card.rarity }}</span>
+                                {% if card.quantity == 0 %}
+                                <span class="badge bg-warning text-dark">Out of Stock</span>
+                                {% endif %}
+                            </div>
                         </div>
+
+                        <!-- Seller Information -->
+                        {% if card.get('seller_info') %}
+                        <div class="card-body py-2 border-bottom">
+                            <div class="seller-info text-center">
+                                {% if card.seller_info.type == 'admin' %}
+                                    <span class="badge bg-primary">
+                                        <i class="fas fa-store me-1"></i>{{ card.seller_info.name }}
+                                    </span>
+                                {% elif card.seller_info.type == 'user' %}
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-user me-1"></i>Sold by {{ card.seller_info.name }}
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+
                         <div class="card-body">
                             <div class="text-center mb-3">
                                 {% if card.image_url %}
@@ -245,7 +265,7 @@
                                         <span class="badge bg-secondary">{{ card.art_style }}</span>
                                     {% endif %}
                                 </p>
-                                <p class="mb-1"><strong>Price:</strong> <span class="text-success fw-bold">{{ "{:,.0f}".format(card.price) }} VND</span></p>
+                                <p class="mb-1"><strong>Price:</strong> <span class="text-success fw-bold">{{ "{:,.0f}".format(card.get('display_price', card.price)) }} VND</span></p>
                                 <p class="mb-2"><strong>Available:</strong>
                                     {% if card.quantity > 0 %}
                                         <span class="text-success">{{ card.quantity }} copies</span>
@@ -265,7 +285,13 @@
                                 </a>
                                 {% if card.quantity > 0 %}
                                 <form method="POST" action="/cart/add" class="add-to-cart-form flex-fill">
-                                     <input type="hidden" name="card_id" value="{{ card.id }}">
+                                    {% if card.get('item_type') == 'user' %}
+                                        <input type="hidden" name="item_type" value="user">
+                                        <input type="hidden" name="inventory_item_id" value="{{ card.inventory_item_id }}">
+                                    {% else %}
+                                        <input type="hidden" name="item_type" value="admin">
+                                        <input type="hidden" name="card_id" value="{{ card.id }}">
+                                    {% endif %}
                                     <input type="hidden" name="quantity" value="1">
                                     <button type="submit" class="btn btn-success btn-sm w-100">
                                         <i class="fas fa-cart-plus me-1"></i>Add to Cart
@@ -384,19 +410,21 @@ document.addEventListener('DOMContentLoaded', function() {
         form.addEventListener('submit', function(e) {
             e.preventDefault();
 
-            // Lấy card_id từ URL của form
-            const cardId = form.querySelector('[name="card_id"]').value;
-            
+            // Get form data based on item type
+            const formData = new FormData(form);
+            const requestData = {};
+
+            for (let [key, value] of formData.entries()) {
+                requestData[key] = value;
+            }
+
             fetch('/cart/add', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-Requested-With': 'XMLHttpRequest'
                 },
-                body: JSON.stringify({
-                    card_id: cardId,
-                    qty: 1
-                })
+                body: JSON.stringify(requestData)
             })
             .then(response => {
                 if (!response.ok) {
