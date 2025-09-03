@@ -44,11 +44,7 @@ login_manager.login_message_category = 'info'
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # Import model classes
-from models import (
-    User, Card, Order, OrderItem,
-    UserInventory, InventoryItem, TradeOffer, TradeItem,
-    CartSession, CartItem
-)
+from models import User, Card
 
 # User loader callback
 @login_manager.user_loader
