@@ -134,6 +134,27 @@ main {
     font-size: 1.25rem;
 }
 
+/* Dropdown menu uniform spacing */
+.dropdown-menu .dropdown-item {
+    padding: 0.5rem 1rem;
+    display: flex;
+    align-items: center;
+}
+
+.dropdown-menu .dropdown-divider {
+    margin: 0.25rem 0;
+}
+
+/* Ensure consistent spacing between dropdown items */
+.dropdown-menu li {
+    margin: 0;
+}
+
+.dropdown-menu li a.dropdown-item {
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+}
+
 /* Card detail page improvements */
 .card-header h3 {
     color: var(--bs-primary);
