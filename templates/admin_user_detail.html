@@ -1,0 +1,507 @@
+{% extends "base.html" %}
+
+{% block title %}User Details - {{ user.username }} - The Lotus TCG{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin') }}">Admin</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin_users') }}">Users</a></li>
+                    <li class="breadcrumb-item active">{{ user.username }}</li>
+                </ol>
+            </nav>
+
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-user me-2"></i>{{ user.username }}</h2>
+                <div>
+                    {% if not user.is_super_admin() or current_user.is_super_admin() %}
+                    <a href="{{ url_for('admin_edit_user', user_id=user.id) }}" class="btn btn-primary">
+                        <i class="fas fa-edit me-2"></i>Edit User
+                    </a>
+                    {% endif %}
+                    <a href="{{ url_for('admin_users') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Users
+                    </a>
+                </div>
+            </div>
+
+            <!-- User Status Alert -->
+            {% if user.account_status == 'suspended' %}
+            <div class="alert alert-warning">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                <strong>Account Suspended</strong>
+                {% if user.suspension_reason %}
+                Reason: {{ user.suspension_reason }}
+                {% endif %}
+                {% if user.suspension_expires %}
+                <br>Expires: {{ user.suspension_expires.strftime('%Y-%m-%d %H:%M UTC') }}
+                {% endif %}
+            </div>
+            {% elif user.account_status == 'banned' %}
+            <div class="alert alert-danger">
+                <i class="fas fa-ban me-2"></i>
+                <strong>Account Banned</strong>
+                {% if user.suspension_reason %}
+                Reason: {{ user.suspension_reason }}
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <div class="row">
+                <!-- User Information -->
+                <div class="col-lg-8">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="fas fa-info-circle me-2"></i>Account Information</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Username:</strong> {{ user.username }}</p>
+                                    <p><strong>Email:</strong> {{ user.email or 'Not provided' }}</p>
+                                    <p><strong>Role:</strong>
+                                        <span class="badge bg-{{ 'warning' if user.role == 'admin' else 'secondary' }}">
+                                            {{ user.role.title() }}
+                                        </span>
+                                    </p>
+                                    <p><strong>Status:</strong>
+                                        {% if user.account_status == 'active' %}
+                                            <span class="badge bg-success">Active</span>
+                                        {% elif user.account_status == 'suspended' %}
+                                            <span class="badge bg-warning">Suspended</span>
+                                        {% elif user.account_status == 'banned' %}
+                                            <span class="badge bg-danger">Banned</span>
+                                        {% endif %}
+                                    </p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Registration Date:</strong>
+                                        {{ user.created_at.strftime('%Y-%m-%d %H:%M UTC') if user.created_at else 'N/A' }}
+                                    </p>
+                                    <p><strong>Last Login:</strong>
+                                        {{ user.last_login.strftime('%Y-%m-%d %H:%M UTC') if user.last_login else 'Never' }}
+                                    </p>
+                                    <p><strong>Two-Factor Auth:</strong>
+                                        {% if user.two_factor_enabled %}
+                                            <span class="badge bg-success">Enabled</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Disabled</span>
+                                        {% endif %}
+                                    </p>
+                                    <p><strong>Login Attempts:</strong> {{ user.login_attempts }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Inventory Overview -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="fas fa-boxes me-2"></i>Inventory Overview</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-md-4">
+                                    <div class="border rounded p-3">
+                                        <h4 class="text-primary mb-1">{{ inventory_stats.total_items }}</h4>
+                                        <small class="text-muted">Total Items</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="border rounded p-3">
+                                        <h4 class="text-success mb-1">{{ inventory_stats.verified_items }}</h4>
+                                        <small class="text-muted">Verified Items</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="border rounded p-3">
+                                        <h4 class="text-info mb-1">{{ "{:,.0f}".format(inventory_stats.total_value) }} VND</h4>
+                                        <small class="text-muted">Total Value</small>
+                                    </div>
+                                </div>
+                            </div>
+                            {% if inventory_stats.total_items > 0 %}
+                            <div class="mt-3">
+                                <a href="{{ url_for('user_inventory') }}?user={{ user.username }}" class="btn btn-outline-primary">
+                                    <i class="fas fa-eye me-2"></i>View Full Inventory
+                                </a>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- User's Inventory Items -->
+                    {% if inventory_items %}
+                    <div class="card mb-4">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0"><i class="fas fa-list me-2"></i>User's Inventory Items</h5>
+                            <small class="text-muted">{{ inventory_pagination.total }} items total</small>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th width="50">Image</th>
+                                            <th width="200">Card Name</th>
+                                            <th width="80">Set</th>
+                                            <th width="70">Rarity</th>
+                                            <th width="80">Condition</th>
+                                            <th width="60">Qty</th>
+                                            <th width="80">Verified</th>
+                                            <th width="90">Value</th>
+                                            <th width="100">Added</th>
+                                            <th width="80">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for item in inventory_items %}
+                                        <tr>
+                                            <td>
+                                                {% if item.card and item.card.image_url %}
+                                                <img src="{{ item.card.image_url }}" alt="{{ item.card_name }}"
+                                                     class="img-thumbnail" style="width: 40px; height: 50px; object-fit: cover;"
+                                                     onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNTAiIHZpZXdCb3g9IjAgMCA0MCA1MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjUwIiBmaWxsPSIjZjhmOWZhIi8+CjxwYXRoIGQ9Ik0yMCAyNWMzLjMxNCAwIDYtMi42ODYgNi02cy0yLjY4Ni02LTYtNi02IDIuNjg2LTYgNiAyLjY4NiA2IDYgNnptMCAxMGwxMC03LTEwLTd6IiBmaWxsPSIjZGVlMmU2Ii8+Cjwvc3ZnPgo=';">
+                                                {% else %}
+                                                <div class="bg-light border rounded d-flex align-items-center justify-content-center"
+                                                     style="width: 40px; height: 50px; font-size: 10px; color: #6c757d;">
+                                                    No Image
+                                                </div>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <div class="fw-bold small">{{ item.card_name }}</div>
+                                                {% if item.card and item.card.description %}
+                                                <div class="text-muted" style="font-size: 11px; line-height: 1.2;">
+                                                    {{ item.card.description[:50] }}{% if item.card.description|length > 50 %}...{% endif %}
+                                                </div>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <small class="text-muted">{{ item.card_set or 'Unknown' }}</small>
+                                            </td>
+                                            <td>
+                                                {% if item.card_rarity %}
+                                                <span class="badge bg-secondary" style="font-size: 10px;">
+                                                    {{ item.card_rarity }}
+                                                </span>
+                                                {% else %}
+                                                <span class="text-muted">Unknown</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                <small>{{ item.condition }}</small>
+                                            </td>
+                                            <td>
+                                                <span class="badge bg-info">{{ item.quantity }}</span>
+                                            </td>
+                                            <td>
+                                                <div id="verification-status-display-{{ item.id }}">
+                                                    {% if item.verification_status == 'verified' %}
+                                                        <span class="badge bg-success" style="font-size: 10px;">
+                                                            <i class="fas fa-check me-1"></i>Verified
+                                                        </span>
+                                                    {% elif item.verification_status == 'pending' %}
+                                                        <span class="badge bg-warning text-dark" style="font-size: 10px;">
+                                                            <i class="fas fa-clock me-1"></i>Pending
+                                                        </span>
+                                                    {% else %}
+                                                        <span class="badge bg-secondary" style="font-size: 10px;">
+                                                            <i class="fas fa-question me-1"></i>Unverified
+                                                        </span>
+                                                    {% endif %}
+                                                </div>
+                                                <div id="verification-status-edit-{{ item.id }}" style="display: none;">
+                                                    <form method="POST" action="{{ url_for('admin_update_verification_status', user_id=user.id, item_id=item.id) }}" class="d-inline">
+                                                        <select name="verification_status" class="form-select form-select-sm mb-1">
+                                                            <option value="unverified" {% if item.verification_status == 'unverified' %}selected{% endif %}>Unverified</option>
+                                                            <option value="pending" {% if item.verification_status == 'pending' %}selected{% endif %}>Pending Review</option>
+                                                            <option value="verified" {% if item.verification_status == 'verified' %}selected{% endif %}>Verified</option>
+                                                        </select>
+                                                        <textarea name="notes" class="form-control form-control-sm mb-1" rows="2" placeholder="Optional notes...">{{ item.notes or '' }}</textarea>
+                                                        <div class="d-flex gap-1">
+                                                            <button type="submit" class="btn btn-success btn-sm">
+                                                                <i class="fas fa-save"></i> Save
+                                                            </button>
+                                                            <button type="button" class="btn btn-secondary btn-sm" onclick="toggleVerificationEdit({{ item.id }})">
+                                                                <i class="fas fa-times"></i> Cancel
+                                                            </button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <small class="fw-bold text-success">
+                                                    {{ "{:,.0f}".format(item.total_value) }} VND
+                                                </small>
+                                            </td>
+                                            <td>
+                                                <small class="text-muted">
+                                                    {% if item.added_at %}
+                                                    {{ item.added_at.strftime('%Y-%m-%d') }}
+                                                    {% else %}
+                                                    N/A
+                                                    {% endif %}
+                                                </small>
+                                            </td>
+                                            <td>
+                                                <div class="btn-group" role="group">
+                                                    <button type="button" class="btn btn-outline-warning btn-sm" onclick="toggleVerificationEdit({{ item.id }})" title="Edit Verification Status">
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Pagination for inventory items -->
+                            {% if inventory_pagination.total_pages > 1 %}
+                            <div class="card-footer">
+                                <nav aria-label="Inventory pagination">
+                                    <ul class="pagination pagination-sm justify-content-center mb-0">
+                                        {% if inventory_pagination.has_prev %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="{{ url_for('admin_user_detail', user_id=user.id, page=inventory_pagination.prev_num) }}">
+                                                <i class="fas fa-chevron-left"></i>
+                                            </a>
+                                        </li>
+                                        {% else %}
+                                        <li class="page-item disabled">
+                                            <span class="page-link"><i class="fas fa-chevron-left"></i></span>
+                                        </li>
+                                        {% endif %}
+
+                                        <li class="page-item disabled">
+                                            <span class="page-link">
+                                                Page {{ inventory_pagination.page }} of {{ inventory_pagination.total_pages }}
+                                            </span>
+                                        </li>
+
+                                        {% if inventory_pagination.has_next %}
+                                        <li class="page-item">
+                                            <a class="page-link" href="{{ url_for('admin_user_detail', user_id=user.id, page=inventory_pagination.next_num) }}">
+                                                <i class="fas fa-chevron-right"></i>
+                                            </a>
+                                        </li>
+                                        {% else %}
+                                        <li class="page-item disabled">
+                                            <span class="page-link"><i class="fas fa-chevron-right"></i></span>
+                                        </li>
+                                        {% endif %}
+                                    </ul>
+                                </nav>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Recent Orders -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="fas fa-shopping-cart me-2"></i>Recent Orders</h5>
+                        </div>
+                        <div class="card-body">
+                            {% if recent_orders %}
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Order ID</th>
+                                            <th>Date</th>
+                                            <th>Status</th>
+                                            <th>Total</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for order in recent_orders %}
+                                        <tr>
+                                            <td>{{ order.id }}</td>
+                                            <td>{{ order.created_at.strftime('%Y-%m-%d') if order.created_at else 'N/A' }}</td>
+                                            <td>
+                                                <span class="badge bg-{{ 'success' if order.status == 'fulfilled' else 'warning' if order.status == 'pending' else 'danger' }}">
+                                                    {{ order.status.title() }}
+                                                </span>
+                                            </td>
+                                            <td>{{ "{:,.0f}".format(order.total_amount) }} VND</td>
+                                            <td>
+                                                <a href="{{ url_for('admin_order_detail', order_id=order.id) }}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
+                                            </td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                            {% else %}
+                            <p class="text-muted mb-0">No orders found for this user.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions Sidebar -->
+                <div class="col-lg-4">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="fas fa-bolt me-2"></i>Quick Actions</h5>
+                        </div>
+                        <div class="card-body d-grid gap-2">
+                            {% if not user.is_super_admin() or current_user.is_super_admin() %}
+                            {% if user.account_status == 'active' %}
+                            <button type="button" class="btn btn-outline-warning"
+                                    onclick="suspendUser({{ user.id }}, '{{ user.username }}')">
+                                <i class="fas fa-pause me-2"></i>Suspend Account
+                            </button>
+                            <button type="button" class="btn btn-outline-danger"
+                                    onclick="banUser({{ user.id }}, '{{ user.username }}')">
+                                <i class="fas fa-ban me-2"></i>Ban Account
+                            </button>
+                            {% elif user.account_status == 'suspended' %}
+                            <form method="POST" action="{{ url_for('admin_reactivate_user', user_id=user.id) }}" class="d-inline">
+                                <button type="submit" class="btn btn-outline-success"
+                                        onclick="return confirm('Are you sure you want to reactivate this user?')">
+                                    <i class="fas fa-play me-2"></i>Reactivate Account
+                                </button>
+                            </form>
+                            {% endif %}
+
+                            <form method="POST" action="{{ url_for('admin_reset_password', user_id=user.id) }}" class="d-inline">
+                                <button type="submit" class="btn btn-outline-secondary"
+                                        onclick="return confirm('This will generate a new password for the user. Continue?')">
+                                    <i class="fas fa-key me-2"></i>Reset Password
+                                </button>
+                            </form>
+
+                            <a href="{{ url_for('admin_edit_user', user_id=user.id) }}" class="btn btn-outline-primary">
+                                <i class="fas fa-edit me-2"></i>Edit Details
+                            </a>
+                            {% else %}
+                            <div class="alert alert-info">
+                                <i class="fas fa-shield-alt me-2"></i>
+                                <strong>Super Admin User</strong><br>
+                                <small>You do not have permission to perform actions on super admin users.</small>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Account Statistics -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Account Stats</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-6">
+                                    <div class="border rounded p-2 mb-2">
+                                        <div class="h6 mb-0">{{ user.login_attempts }}</div>
+                                        <small class="text-muted">Login Attempts</small>
+                                    </div>
+                                </div>
+                                <div class="col-6">
+                                    <div class="border rounded p-2 mb-2">
+                                        <div class="h6 mb-0">{{ recent_orders|length }}</div>
+                                        <small class="text-muted">Total Orders</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Suspend User Modal -->
+<div class="modal fade" id="suspendModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Suspend User Account</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="">
+                <div class="modal-body">
+                    <p>Suspend user: <strong>{{ user.username }}</strong></p>
+                    <div class="mb-3">
+                        <label for="suspendReason" class="form-label">Reason for suspension</label>
+                        <textarea class="form-control" id="suspendReason" name="reason" rows="3" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="suspendDays" class="form-label">Suspension Duration (days)</label>
+                        <input type="number" class="form-control" id="suspendDays" name="days" min="1">
+                        <div class="form-text">Leave empty for permanent suspension</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">Suspend User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Ban User Modal -->
+<div class="modal fade" id="banModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Ban User Account</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="">
+                <div class="modal-body">
+                    <p><strong>Warning:</strong> This action cannot be undone!</p>
+                    <p>Ban user: <strong>{{ user.username }}</strong></p>
+                    <div class="mb-3">
+                        <label for="banReason" class="form-label">Reason for ban</label>
+                        <textarea class="form-control" id="banReason" name="reason" rows="3" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-danger">Ban User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function suspendUser(userId, username) {
+    document.querySelector('#suspendModal form').action = `/admin/users/${userId}/suspend`;
+    new bootstrap.Modal(document.getElementById('suspendModal')).show();
+}
+
+function banUser(userId, username) {
+    document.querySelector('#banModal form').action = `/admin/users/${userId}/ban`;
+    new bootstrap.Modal(document.getElementById('banModal')).show();
+}
+
+function toggleVerificationEdit(itemId) {
+    const displayDiv = document.getElementById(`verification-status-display-${itemId}`);
+    const editDiv = document.getElementById(`verification-status-edit-${itemId}`);
+
+    if (displayDiv && editDiv) {
+        if (displayDiv.style.display === 'none') {
+            displayDiv.style.display = 'block';
+            editDiv.style.display = 'none';
+        } else {
+            displayDiv.style.display = 'none';
+            editDiv.style.display = 'block';
+        }
+    }
+}
+</script>
+{% endblock %}

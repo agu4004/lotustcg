@@ -1,0 +1,810 @@
+{% extends "base.html" %}
+
+{% block title %}My Inventory - The Lotus TCG{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row">
+        <div class="col-12">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2>My Inventory</h2>
+                    <p class="text-muted mb-0">Manage your card collection</p>
+                </div>
+                <div class="text-end">
+                    <span class="badge bg-info fs-6">{{ total_items }} total items</span>
+                </div>
+            </div>
+
+
+            <!-- Inventory Visibility Toggle -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-eye me-2"></i>Inventory Visibility
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">Make Inventory Public</h6>
+                            <p class="text-muted mb-0">
+                                {% if user_inventory.is_public %}
+                                    Your inventory is <strong>public</strong> - other users can see your collection
+                                {% else %}
+                                    Your inventory is <strong>private</strong> - only you can see your collection
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="publicToggle"
+                                   {% if user_inventory.is_public %}checked{% endif %}
+                                   onchange="toggleInventoryVisibility()">
+                            <label class="form-check-label" for="publicToggle">
+                                {% if user_inventory.is_public %}Public{% else %}Private{% endif %}
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inventory Statistics -->
+            <div class="row mb-4">
+                <div class="col-md-3 mb-3">
+                    <div class="card text-center h-100">
+                        <div class="card-body">
+                            <div class="display-4 text-primary mb-2">
+                                <i class="fas fa-cubes"></i>
+                            </div>
+                            <h5 class="card-title">{{ total_items }}</h5>
+                            <p class="card-text text-muted">Total Items</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="card text-center h-100">
+                        <div class="card-body">
+                            <div class="display-4 text-success mb-2">
+                                <i class="fas fa-check-circle"></i>
+                            </div>
+                            <h5 class="card-title">{{ verified_items }}</h5>
+                            <p class="card-text text-muted">Verified Items</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="card text-center h-100">
+                        <div class="card-body">
+                            <div class="display-4 text-info mb-2">
+                                <i class="fas fa-dollar-sign"></i>
+                            </div>
+                            <h5 class="card-title">{{ "{:,.0f}".format(total_value) }}</h5>
+                            <p class="card-text text-muted">Est. Value (VND)</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3 mb-3">
+                    <div class="card text-center h-100">
+                        <div class="card-body">
+                            <div class="display-4 text-warning mb-2">
+                                <i class="fas fa-layer-group"></i>
+                            </div>
+                            <h5 class="card-title">{{ inventory_items|length if inventory_items else 0 }}</h5>
+                            <p class="card-text text-muted">Unique Cards</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- CSV Import/Export Section -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-file-csv me-2"></i>CSV Import/Export
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Import from CSV</h6>
+                            <p class="text-muted small mb-3">Upload a CSV file to bulk import items to your inventory</p>
+                            <form action="{{ url_for('upload_user_inventory_csv') }}" method="post" enctype="multipart/form-data">
+                                <div class="input-group mb-3">
+                                    <input type="file" class="form-control" id="csvFile" name="csv_file" accept=".csv" required>
+                                    <button class="btn btn-outline-primary" type="submit">
+                                        <i class="fas fa-upload me-1"></i>Import
+                                    </button>
+                                </div>
+                            </form>
+                            <a href="{{ url_for('download_user_inventory_template_csv') }}" class="btn btn-outline-info btn-sm">
+                                <i class="fas fa-download me-1"></i>Download Template
+                            </a>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Export to CSV</h6>
+                            <p class="text-muted small mb-3">Download your current inventory as a CSV file</p>
+                            <a href="{{ url_for('download_user_inventory_csv') }}" class="btn btn-outline-success">
+                                <i class="fas fa-download me-1"></i>Export Inventory
+                            </a>
+                        </div>
+                    </div>
+                    <hr>
+                    <h6><i class="fas fa-info-circle me-2"></i>CSV Format Guidelines</h6>
+                    <ul class="mb-0 small">
+                        <li><strong>Required columns:</strong> name, quantity</li>
+                        <li><strong>Optional columns:</strong> set_name, rarity, condition, sale_price, market_price, is_for_sale, language, notes, grade, foil_type, description, image_url</li>
+                        <li><strong>Data types:</strong> quantity (integer), sale_price/market_price (decimal), is_for_sale (true/false)</li>
+                        <li><strong>Encoding:</strong> UTF-8 recommended</li>
+                        <li><strong>Max file size:</strong> 10MB</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Add Item Form -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-plus me-2"></i>Add Item to Inventory
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form id="addItemForm">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="cardName" class="form-label">Card Name *</label>
+                                <input type="text" class="form-control" id="cardName" name="card_name" required
+                                       placeholder="Enter card name">
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="cardSet" class="form-label">Set</label>
+                                <input type="text" class="form-control" id="cardSet" name="card_set"
+                                       placeholder="Card set">
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="cardRarity" class="form-label">Rarity</label>
+                                <select class="form-select" id="cardRarity" name="card_rarity">
+                                    <option value="Common">Common</option>
+                                    <option value="Rare">Rare</option>
+                                    <option value="Super Rare">Super Rare</option>
+                                    <option value="Majestic">Majestic</option>
+                                    <option value="Legendary">Legendary</option>
+                                    <option value="Promo">Promo</option>
+                                    <option value="Treasure">Treasure</option>
+                                    <option value="Marvel">Marvel</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <label for="quantity" class="form-label">Quantity *</label>
+                                <input type="number" class="form-control" id="quantity" name="quantity"
+                                       min="1" value="1" required>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="condition" class="form-label">Condition</label>
+                                <select class="form-select" id="condition" name="condition">
+                                    <option value="Near Mint">Near Mint</option>
+                                    <option value="Light Play">Light Play</option>
+                                    <option value="Moderate Play">Moderate Play</option>
+                                    <option value="Heavy Play">Heavy Play</option>
+                                    <option value="Damaged">Damaged</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="foiling" class="form-label">Foiling</label>
+                                <select class="form-select" id="foiling" name="foiling">
+                                    <option value="NF">Non Foil (NF)</option>
+                                    <option value="RF">Rainbow Foil (RF)</option>
+                                    <option value="CF">Cold Foil (CF)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <label for="art_style" class="form-label">Art Style</label>
+                                <select class="form-select" id="art_style" name="art_style">
+                                    <option value="Normal">Normal</option>
+                                    <option value="EA">Extended Art (EA)</option>
+                                    <option value="WB">White Border (WB)</option>
+                                    <option value="ALT">Alternate Art (ALT)</option>
+                                    <option value="GF">Golden (GF)</option>
+                                    <option value="Marvel">Marvel</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="cardImage" class="form-label">Image URL</label>
+                                <input type="url" class="form-control" id="cardImage" name="card_image"
+                                       placeholder="https://example.com/card-image.jpg">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="description" class="form-label">Description</label>
+                                <textarea class="form-control" id="description" name="description"
+                                          rows="2" placeholder="Optional description"></textarea>
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-plus me-2"></i>Add to Inventory
+                            </button>
+                            <button type="button" class="btn btn-secondary" onclick="clearAddForm()">
+                                <i class="fas fa-times me-1"></i>Clear
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Bulk Actions -->
+            <div class="card mb-4" id="bulkActions" style="display: none;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <span id="selectedCount">0</span> items selected
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-outline-danger btn-sm" onclick="bulkDelete()">
+                                <i class="fas fa-trash me-1"></i>Bulk Delete
+                            </button>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="clearSelection()">
+                                <i class="fas fa-times me-1"></i>Clear Selection
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inventory Items -->
+            {% if inventory_items %}
+                <div class="row">
+                    {% for item in inventory_items %}
+                    <div class="col-xl-4 col-lg-6 col-md-6 mb-4">
+                        <div class="card h-100">
+                           <div class="card-header">
+                               <div class="d-flex align-items-center">
+                                   <input type="checkbox" class="form-check-input me-2 item-checkbox flex-shrink-0"
+                                          value="{{ item.id }}" onchange="updateBulkActions()">
+                                   <strong class="text-truncate flex-grow-1">{{ item.card_name }}</strong>
+                               </div>
+                           </div>
+                            <div class="card-body">
+                                <!-- Status badges -->
+                                <div class="d-flex gap-2 mb-3">
+                                    {% if item.verification_status == 'verified' %}
+                                        <span class="badge bg-success" title="Verified by admin">
+                                            <i class="fas fa-check me-1"></i>Verified
+                                        </span>
+                                    {% elif item.verification_status == 'pending' %}
+                                        <span class="badge bg-warning text-dark" title="Pending verification">
+                                            <i class="fas fa-clock me-1"></i>Pending
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary" title="Unverified">
+                                            <i class="fas fa-question me-1"></i>Unverified
+                                        </span>
+                                    {% endif %}
+                                    {% if item.is_public %}
+                                        <span class="badge bg-info" title="Public - visible in catalog">
+                                            <i class="fas fa-globe me-1"></i>Public
+                                        </span>
+                                    {% endif %}
+                                </div>
+                                <div class="text-center mb-3">
+                                    {% if item.card_image %}
+                                        <img src="{{ item.card_image }}" alt="{{ item.card_name }}"
+                                             class="img-fluid rounded" style="height: 150px; width: auto; max-width: 100%; object-fit: contain;"
+                                             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                                        <div style="display: none;">
+                                            <i class="fas fa-image fa-3x text-muted"></i>
+                                            <p class="text-muted small mt-1">No Image</p>
+                                        </div>
+                                    {% else %}
+                                        <i class="fas fa-image fa-3x text-muted"></i>
+                                        <p class="text-muted small mt-1">No Image</p>
+                                    {% endif %}
+                                </div>
+
+                                <div class="small">
+                                    <p class="mb-1"><strong>Set:</strong> {{ item.card_set }}</p>
+                                    <p class="mb-1"><strong>Condition:</strong>
+                                        <span class="badge bg-secondary">{{ item.condition }}</span>
+                                    </p>
+                                    <p class="mb-1"><strong>Rarity:</strong>
+                                        <span class="badge bg-light text-dark">{{ item.card_rarity }}</span>
+                                    </p>
+                                    <p class="mb-1"><strong>Quantity:</strong> {{ item.quantity }}</p>
+                                    <p class="mb-1"><strong>Market Price:</strong>
+                                        <span class="text-muted">{{ "{:,.0f}".format(item.card_price) }} VND</span>
+                                    </p>
+                                    <p class="mb-1"><strong>Added:</strong>
+                                        <span class="text-muted">{{ item.added_at.strftime('%Y-%m-%d') }}</span>
+                                    </p>
+                                    <p class="mb-1"><strong>Visibility:</strong>
+                                        {% if item.is_public %}
+                                            <span class="badge bg-info">Public</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Private</span>
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                           <div class="card-footer">
+                               <div class="row g-2">
+                                   <div class="col-6">
+                                       <a href="{{ url_for('view_inventory_item', item_id=item.id) }}"
+                                          class="btn btn-outline-primary btn-sm w-100">
+                                           <i class="fas fa-eye me-1"></i>Details
+                                       </a>
+                                   </div>
+                                   <div class="col-6">
+                                       <a href="{{ url_for('edit_inventory_item', item_id=item.id) }}"
+                                          class="btn btn-outline-secondary btn-sm w-100">
+                                           <i class="fas fa-edit me-1"></i>Edit
+                                       </a>
+                                   </div>
+                               </div>
+                           </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <!-- Empty Inventory -->
+                <div class="text-center py-5">
+                    <i class="fas fa-box-open display-1 text-muted mb-4"></i>
+                    <h4>Your inventory is empty</h4>
+                    <p class="text-muted mb-4">Start building your collection by adding cards from the catalog.</p>
+                    <a href="{{ url_for('catalog') }}" class="btn btn-primary">
+                        <i class="fas fa-search me-2"></i>Browse Catalog
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+/* Ensure consistent button sizing in inventory cards */
+.card-footer .btn {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.75rem;
+}
+
+/* Card layout improvements */
+.card {
+    max-width: 100%;
+}
+
+.card-header {
+    padding: 0.75rem;
+    overflow: hidden;
+}
+
+.card-header strong {
+    font-size: 1rem;
+    line-height: 1.2;
+}
+
+/* Status badges in card body */
+.card-body .badge {
+    font-size: 0.75rem;
+    padding: 0.375rem 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Ensure card content fits properly */
+.card-body {
+    padding: 1rem 0.75rem;
+}
+
+/* Responsive card sizing */
+@media (max-width: 768px) {
+    .col-xl-4, .col-lg-6, .col-md-6 {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+}
+</style>
+<script>
+// Global variables
+let selectedItems = new Set();
+
+
+// Bulk operations
+function updateBulkActions() {
+    const checkboxes = document.querySelectorAll('.item-checkbox:checked');
+    selectedItems.clear();
+
+    checkboxes.forEach(checkbox => {
+        selectedItems.add(parseInt(checkbox.value));
+    });
+
+    const bulkActions = document.getElementById('bulkActions');
+    const selectedCount = document.getElementById('selectedCount');
+
+    if (selectedItems.size > 0) {
+        bulkActions.style.display = 'block';
+        selectedCount.textContent = selectedItems.size;
+    } else {
+        bulkActions.style.display = 'none';
+    }
+}
+
+function clearSelection() {
+    document.querySelectorAll('.item-checkbox').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    updateBulkActions();
+}
+
+function bulkEdit() {
+    if (selectedItems.size === 0) {
+        showMessage('Please select items to edit.', 'warning');
+        return;
+    }
+
+    // For now, show a message. In a full implementation, this would open a bulk edit modal
+    showMessage(`Bulk edit functionality for ${selectedItems.size} items coming soon!`, 'info');
+}
+
+function bulkDelete() {
+    if (selectedItems.size === 0) {
+        showMessage('Please select items to delete.', 'warning');
+        return;
+    }
+
+    if (!confirm(`Are you sure you want to delete ${selectedItems.size} items? This action cannot be undone.`)) {
+        return;
+    }
+
+    // Delete items one by one
+    const promises = Array.from(selectedItems).map(itemId =>
+        fetch(`/api/inventory/item/${itemId}`, {
+            method: 'DELETE',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }).then(response => response.json())
+    );
+
+    Promise.all(promises).then(results => {
+        const successCount = results.filter(r => r.success).length;
+        const failCount = results.length - successCount;
+
+        if (successCount > 0) {
+            showMessage(`Successfully deleted ${successCount} items.`, 'success');
+            setTimeout(() => location.reload(), 1000);
+        }
+        if (failCount > 0) {
+            showMessage(`Failed to delete ${failCount} items.`, 'error');
+        }
+    }).catch(error => {
+        console.error('Bulk delete error:', error);
+        showMessage('An error occurred during bulk delete.', 'error');
+    });
+}
+
+
+// Existing functions
+function toggleInventoryVisibility() {
+    const toggle = document.getElementById('publicToggle');
+    const label = document.querySelector('label[for="publicToggle"]');
+    const description = document.querySelector('.card-body p');
+    const isPublic = toggle.checked;
+
+    // Update label text immediately
+    label.textContent = isPublic ? 'Public' : 'Private';
+
+    fetch('/api/inventory/toggle-visibility', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({ is_public: isPublic })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Update the description text
+            if (isPublic) {
+                description.innerHTML = 'Your inventory is <strong>public</strong> - other users can see your collection';
+            } else {
+                description.innerHTML = 'Your inventory is <strong>private</strong> - only you can see your collection';
+            }
+
+            // Show success message
+            showMessage('Inventory visibility updated successfully!', 'success');
+        } else {
+            // Revert checkbox and label on error
+            toggle.checked = !isPublic;
+            label.textContent = !isPublic ? 'Public' : 'Private';
+            showMessage('Failed to update inventory visibility.', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        // Revert checkbox and label on error
+        toggle.checked = !isPublic;
+        label.textContent = !isPublic ? 'Public' : 'Private';
+        showMessage('An error occurred while updating visibility.', 'error');
+    });
+}
+
+
+function showMessage(message, type) {
+    const flashContainer = document.querySelector('.flash-messages');
+    if (flashContainer) {
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        flashContainer.appendChild(alertDiv);
+
+        // Auto-remove after 3 seconds
+        setTimeout(() => {
+            alertDiv.remove();
+        }, 3000);
+    }
+}
+
+function clearAddForm() {
+    // Reset the form
+    document.getElementById('addItemForm').reset();
+}
+
+// Handle add item form submission
+document.getElementById('addItemForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const formData = new FormData(this);
+    const data = Object.fromEntries(formData.entries());
+
+    // No sale-related fields to convert
+
+    // Show loading state
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Adding...';
+    submitBtn.disabled = true;
+
+    fetch('/api/inventory/add-item', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showMessage('Item added to inventory successfully!', 'success');
+            clearAddForm();
+
+            // Update statistics counts instantly
+            const totalItemsElement = document.querySelector('.badge.bg-info.fs-6');
+            if (totalItemsElement) {
+                const currentTotalText = totalItemsElement.textContent;
+                const currentTotal = parseInt(currentTotalText) || 0;
+                totalItemsElement.textContent = (currentTotal + 1) + ' total items';
+            }
+
+            // Reload the page to show the new item
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            showMessage(data.error || 'Failed to add item to inventory.', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showMessage('An error occurred while adding the item.', 'error');
+    })
+    .finally(() => {
+        // Restore button state
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    });
+});
+
+// Toggle listed for sale status
+function toggleListedForSale(itemId, currentStatus) {
+    const button = document.getElementById(`toggleBtn${itemId}`);
+    const shopButton = document.getElementById(`shopBtn${itemId}`);
+    const originalText = button.innerHTML;
+
+    // Find the card container and status badges
+    const card = button.closest('.card');
+    const statusBadges = card.querySelectorAll('.card-body .badge');
+    let listedBadge = null;
+
+    // Find the listing status badge (more robust selector)
+    statusBadges.forEach(badge => {
+        if (badge.innerHTML.includes('fa-store') || badge.innerHTML.includes('fa-store-slash')) {
+            listedBadge = badge;
+        }
+    });
+
+    // Show loading state
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading...';
+    button.disabled = true;
+
+    fetch(`/api/inventory/toggle-listed-for-sale/${itemId}`, {
+        method: 'POST',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const newStatus = data.listed_for_sale;
+            const icon = newStatus ? 'check' : 'times';
+            const text = newStatus ? 'Listed' : 'Not Listed';
+            const btnClass = newStatus ? 'btn-outline-success' : 'btn-outline-secondary';
+
+            button.innerHTML = `<i class="fas fa-${icon} me-1"></i>${text}`;
+            button.className = `btn ${btnClass} btn-sm w-100`;
+
+            // Update the status badge in the card body
+            if (listedBadge) {
+                const badgeIcon = newStatus ? 'store' : 'store-slash';
+                const badgeText = newStatus ? 'Listed' : 'Not Listed';
+                const badgeClass = newStatus ? 'badge bg-success' : 'badge bg-secondary';
+
+                listedBadge.innerHTML = `<i class="fas fa-${badgeIcon} me-1"></i>${badgeText}`;
+                listedBadge.className = badgeClass;
+                listedBadge.title = newStatus ? 'Actively listed for sale' : 'Not listed for sale';
+            }
+
+            // Update the "For Sale" count in statistics
+            const forSaleStatsCard = Array.from(document.querySelectorAll('.card')).find(card =>
+                card.querySelector('.fas.fa-tags') && card.querySelector('h5.card-title')
+            );
+            if (forSaleStatsCard) {
+                const forSaleCountElement = forSaleStatsCard.querySelector('h5.card-title');
+                const currentCount = parseInt(forSaleCountElement.textContent) || 0;
+                const newCount = newStatus ? currentCount + 1 : Math.max(0, currentCount - 1);
+                forSaleCountElement.textContent = newCount;
+            }
+
+            // Update the total items count in header
+            const totalItemsBadge = document.querySelector('.badge.bg-info.fs-6');
+            if (totalItemsBadge) {
+                const currentTotalText = totalItemsBadge.textContent;
+                const currentTotal = parseInt(currentTotalText) || 0;
+                // Total items count doesn't change when toggling sale status, so keep it the same
+                // This is just to ensure consistency
+            }
+
+            // Update shop button state
+            if (!newStatus) {
+                shopButton.disabled = true;
+                shopButton.innerHTML = '<i class="fas fa-eye-slash me-1"></i>Hidden';
+                shopButton.className = 'btn btn-outline-secondary btn-sm w-100';
+
+                // Also hide the "Visible in Shop" badge when unlisting
+                const shopBadgeContainer = card.querySelector('.small p.mb-0');
+                if (shopBadgeContainer) {
+                    shopBadgeContainer.style.display = 'none';
+                }
+            } else {
+                shopButton.disabled = false;
+                const shopIcon = data.show_in_shop ? 'eye' : 'eye-slash';
+                const shopText = data.show_in_shop ? 'Shop' : 'Hidden';
+                shopButton.innerHTML = `<i class="fas fa-${shopIcon} me-1"></i>${shopText}`;
+            }
+
+            showMessage(data.message, 'success');
+        } else {
+            showMessage(data.error || 'Failed to update item status.', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showMessage('An error occurred while updating the item status.', 'error');
+    })
+    .finally(() => {
+        // Restore button state
+        button.disabled = false;
+    });
+}
+
+// Toggle show in shop status
+function toggleShowInShop(itemId, currentStatus) {
+    const button = document.getElementById(`shopBtn${itemId}`);
+    const originalText = button.innerHTML;
+
+    // Find the card container to locate the "Visible in Shop" badge
+    const card = button.closest('.card');
+    const shopBadgeContainer = card.querySelector('.small p.mb-0');
+
+    // Show loading state
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Loading...';
+    button.disabled = true;
+
+    fetch(`/api/inventory/item/${itemId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        },
+        body: JSON.stringify({
+            show_in_shop: !currentStatus
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const newStatus = !currentStatus;
+            const icon = newStatus ? 'eye' : 'eye-slash';
+            const text = newStatus ? 'Shop' : 'Hidden';
+            const btnClass = newStatus ? 'btn-outline-info' : 'btn-outline-secondary';
+
+            button.innerHTML = `<i class="fas fa-${icon} me-1"></i>${text}`;
+            button.className = `btn ${btnClass} btn-sm w-100`;
+
+            console.log(`Button updated: currentStatus=${currentStatus}, newStatus=${newStatus}, text=${text}`);
+
+            // Update the "Visible in Shop" badge instantly
+            if (newStatus) {
+                // Show the badge
+                if (!shopBadgeContainer) {
+                    // Create the badge container if it doesn't exist
+                    const smallDiv = card.querySelector('.small');
+                    if (smallDiv) {
+                        const newBadgeP = document.createElement('p');
+                        newBadgeP.className = 'mb-0';
+                        newBadgeP.innerHTML = '<span class="badge bg-success">Visible in Shop</span>';
+                        smallDiv.appendChild(newBadgeP);
+                        console.log('Created new "Visible in Shop" badge');
+                    }
+                } else {
+                    // Update existing badge
+                    shopBadgeContainer.innerHTML = '<span class="badge bg-success">Visible in Shop</span>';
+                    shopBadgeContainer.style.display = 'block';
+                    console.log('Updated existing "Visible in Shop" badge');
+                }
+            } else {
+                // Hide the badge
+                if (shopBadgeContainer) {
+                    shopBadgeContainer.style.display = 'none';
+                    console.log('Hid "Visible in Shop" badge');
+                }
+            }
+
+            showMessage(`Item ${newStatus ? 'now visible' : 'hidden'} in shop`, 'success');
+        } else {
+            showMessage(data.error || 'Failed to update shop visibility.', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showMessage('An error occurred while updating shop visibility.', 'error');
+    })
+    .finally(() => {
+        // Restore button state
+        button.disabled = false;
+    });
+}
+
+// Add loading state to toggle
+document.getElementById('publicToggle').addEventListener('change', function() {
+    this.disabled = true;
+    // Re-enable after request completes (handled in toggleInventoryVisibility)
+    setTimeout(() => {
+        this.disabled = false;
+    }, 1000);
+});
+
+</script>
+{% endblock %}

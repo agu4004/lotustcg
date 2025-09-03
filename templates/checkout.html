@@ -89,6 +89,28 @@
                             </div>
                         </div>
 
+                        <!-- Coupon Code -->
+                        <div class="mb-4">
+                            <h5>Discount Code</h5>
+                            <div class="input-group">
+                                <input type="text" class="form-control text-uppercase" id="coupon_code"
+                                       name="coupon_code" placeholder="Enter coupon code"
+                                       value="{{ applied_coupon.code if applied_coupon else '' }}">
+                                <button class="btn btn-outline-primary" type="button" id="apply-coupon-btn">
+                                    <i class="fas fa-tag me-1"></i>Apply
+                                </button>
+                                {% if applied_coupon %}
+                                <button class="btn btn-outline-danger" type="button" id="remove-coupon-btn">
+                                    <i class="fas fa-times me-1"></i>Remove
+                                </button>
+                                {% endif %}
+                            </div>
+                            <div class="form-text">
+                                Enter a discount code to apply to your order.
+                            </div>
+                            <div id="coupon-message" class="mt-2" style="display: none;"></div>
+                        </div>
+
                         <!-- Order Summary -->
                         <div class="mb-4">
                             <h5>Order Summary</h5>
@@ -113,10 +135,29 @@
                                         {% endfor %}
                                     </tbody>
                                     <tfoot>
+                                        {% if applied_coupon %}
+                                        <tr>
+                                            <th colspan="3">Subtotal:</th>
+                                            <th>{{ "{:,.0f}".format(total_price) }} VND</th>
+                                        </tr>
+                                        <tr class="table-success">
+                                            <th colspan="3">
+                                                <i class="fas fa-tag me-1"></i>
+                                                Coupon: {{ applied_coupon.code }}
+                                                ({{ applied_coupon.discount_percentage }}% off)
+                                            </th>
+                                            <th>-{{ "{:,.0f}".format(discount_amount) }} VND</th>
+                                        </tr>
+                                        <tr class="table-primary fw-bold">
+                                            <th colspan="3">Total after discount:</th>
+                                            <th>{{ "{:,.0f}".format(final_total) }} VND</th>
+                                        </tr>
+                                        {% else %}
                                         <tr>
                                             <th colspan="3">Total:</th>
                                             <th>{{ "{:,.0f}".format(total_price) }} VND</th>
                                         </tr>
+                                        {% endif %}
                                     </tfoot>
                                 </table>
                             </div>
@@ -191,6 +232,118 @@ document.addEventListener('DOMContentLoaded', function() {
     form.addEventListener('submit', function(e) {
         // Additional validation can be added here if needed
         console.log('Form submitted');
+    });
+
+    // Coupon functionality
+    const couponCodeInput = document.getElementById('coupon_code');
+    const applyCouponBtn = document.getElementById('apply-coupon-btn');
+    const removeCouponBtn = document.getElementById('remove-coupon-btn');
+    const couponMessage = document.getElementById('coupon-message');
+
+    function showCouponMessage(message, type = 'info') {
+        couponMessage.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show" role="alert">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>`;
+        couponMessage.style.display = 'block';
+    }
+
+    function hideCouponMessage() {
+        couponMessage.style.display = 'none';
+    }
+
+    function applyCoupon() {
+        const couponCode = couponCodeInput.value.trim().toUpperCase();
+
+        if (!couponCode) {
+            showCouponMessage('Please enter a coupon code.', 'warning');
+            return;
+        }
+
+        // Disable button during request
+        applyCouponBtn.disabled = true;
+        applyCouponBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Applying...';
+
+        // Send AJAX request to apply coupon
+        fetch('/api/coupon/apply', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ coupon_code: couponCode })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showCouponMessage(`Coupon "${couponCode}" applied successfully! You saved ${data.discount_amount} VND.`, 'success');
+                // Reload page to show updated totals
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            } else {
+                showCouponMessage(data.error || 'Failed to apply coupon.', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error applying coupon:', error);
+            showCouponMessage('An error occurred while applying the coupon.', 'danger');
+        })
+        .finally(() => {
+            // Re-enable button
+            applyCouponBtn.disabled = false;
+            applyCouponBtn.innerHTML = '<i class="fas fa-tag me-1"></i>Apply';
+        });
+    }
+
+    function removeCoupon() {
+        // Disable button during request
+        removeCouponBtn.disabled = true;
+        removeCouponBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Removing...';
+
+        // Send AJAX request to remove coupon
+        fetch('/api/coupon/remove', {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showCouponMessage('Coupon removed successfully.', 'info');
+                // Reload page to show updated totals
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            } else {
+                showCouponMessage(data.error || 'Failed to remove coupon.', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error removing coupon:', error);
+            showCouponMessage('An error occurred while removing the coupon.', 'danger');
+        })
+        .finally(() => {
+            // Re-enable button
+            removeCouponBtn.disabled = false;
+            removeCouponBtn.innerHTML = '<i class="fas fa-times me-1"></i>Remove';
+        });
+    }
+
+    // Event listeners
+    applyCouponBtn.addEventListener('click', applyCoupon);
+    if (removeCouponBtn) {
+        removeCouponBtn.addEventListener('click', removeCoupon);
+    }
+
+    // Auto-uppercase coupon code input
+    couponCodeInput.addEventListener('input', function() {
+        this.value = this.value.toUpperCase();
+    });
+
+    // Allow Enter key to apply coupon
+    couponCodeInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            applyCoupon();
+        }
     });
 });
 </script>
