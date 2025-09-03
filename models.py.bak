@@ -47,6 +47,9 @@ class Card(db.Model):
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     description: Mapped[str] = mapped_column(Text, nullable=True)
     image_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    foiling: Mapped[str] = mapped_column(String(20), nullable=False, default='NF')
+    art_style: Mapped[str] = mapped_column(String(20), nullable=False, default='normal')
+    is_deleted: Mapped[bool] = mapped_column(db.Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
     
@@ -62,9 +65,17 @@ class Card(db.Model):
             'quantity': self.quantity,
             'description': self.description or '',
             'image_url': self.image_url or '',
+            'foiling': self.foiling,
+            'art_style': self.art_style,
+            'is_deleted': self.is_deleted,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
+
+    def soft_delete(self):
+        """Mark card as deleted without removing from database"""
+        self.is_deleted = True
+        self.updated_at = func.now()
     
     def __str__(self) -> str:
         """String representation of card"""
@@ -79,6 +90,7 @@ class Order(db.Model):
     contact_number: Mapped[str] = mapped_column(String(20), nullable=False)
     facebook_details: Mapped[str] = mapped_column(Text, nullable=True)
     shipment_method: Mapped[str] = mapped_column(String(20), nullable=False)  # 'shipping' or 'pickup'
+    pickup_location: Mapped[str] = mapped_column(String(50), nullable=True)  # 'Iron Hammer' or 'Floating Dojo'
     status: Mapped[str] = mapped_column(String(20), nullable=False, default='pending')
     total_amount: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
 
@@ -103,6 +115,7 @@ class Order(db.Model):
             'contact_number': self.contact_number,
             'facebook_details': self.facebook_details,
             'shipment_method': self.shipment_method,
+            'pickup_location': self.pickup_location,
             'status': self.status,
             'total_amount': float(self.total_amount),
             'shipping_address': self.shipping_address,
