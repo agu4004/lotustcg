@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}Account Settings - The Lotus TCG{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+                    <li class="breadcrumb-item active">Account Settings</li>
+                </ol>
+            </nav>
+
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-user-cog me-2"></i>Account Settings</h2>
+                <a href="{{ url_for('user_inventory') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Inventory
+                </a>
+            </div>
+
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="fas fa-user-edit me-2"></i>Update Profile Information</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST" id="accountSettingsForm">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="username" class="form-label">Username *</label>
+                                        <input type="text" class="form-control" id="username" name="username"
+                                               value="{{ current_user.username }}" required minlength="3" maxlength="80">
+                                        <div class="form-text">3-80 characters, letters, numbers, and underscores only</div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="email" class="form-label">Email Address</label>
+                                        <input type="email" class="form-control" id="email" name="email"
+                                               value="{{ current_user.email or '' }}" maxlength="120">
+                                        <div class="form-text">Optional, but recommended for account recovery</div>
+                                    </div>
+                                </div>
+
+                                <hr class="my-4">
+
+                                <h6 class="mb-3"><i class="fas fa-key me-2"></i>Change Password</h6>
+                                <div class="alert alert-info">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    Leave password fields empty if you don't want to change your password.
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="current_password" class="form-label">Current Password</label>
+                                        <input type="password" class="form-control" id="current_password" name="current_password">
+                                        <div class="form-text">Required only if changing password</div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="new_password" class="form-label">New Password</label>
+                                        <input type="password" class="form-control" id="new_password" name="new_password" minlength="8">
+                                        <div class="form-text">Minimum 8 characters with uppercase, lowercase, number, and special character</div>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label for="confirm_password" class="form-label">Confirm New Password</label>
+                                    <input type="password" class="form-control" id="confirm_password" name="confirm_password">
+                                    <div class="form-text">Must match new password</div>
+                                </div>
+
+                                <hr class="my-4">
+
+                                <h6 class="mb-3"><i class="fas fa-shield-alt me-2"></i>Security Settings</h6>
+
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="two_factor_enabled" name="two_factor_enabled"
+                                               {% if current_user.two_factor_enabled %}checked{% endif %}>
+                                        <label class="form-check-label" for="two_factor_enabled">
+                                            <strong>Enable Two-Factor Authentication</strong>
+                                        </label>
+                                    </div>
+                                    <div class="form-text">
+                                        Add an extra layer of security to your account (coming soon)
+                                    </div>
+                                </div>
+
+                                <div class="d-flex gap-2 mt-4">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-save me-2"></i>Save Changes
+                                    </button>
+                                    <button type="reset" class="btn btn-outline-secondary">
+                                        <i class="fas fa-undo me-2"></i>Reset Form
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <!-- Account Information -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="fas fa-info-circle me-2"></i>Account Information</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-2">
+                                <strong>Account Status:</strong>
+                                {% if current_user.account_status == 'active' %}
+                                    <span class="badge bg-success">Active</span>
+                                {% elif current_user.account_status == 'suspended' %}
+                                    <span class="badge bg-warning">Suspended</span>
+                                {% elif current_user.account_status == 'banned' %}
+                                    <span class="badge bg-danger">Banned</span>
+                                {% endif %}
+                            </div>
+                            <div class="mb-2">
+                                <strong>Role:</strong>
+                                {% if current_user.is_admin() %}
+                                    <span class="badge bg-warning">Administrator</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">User</span>
+                                {% endif %}
+                            </div>
+                            <div class="mb-2">
+                                <strong>Member Since:</strong><br>
+                                <small class="text-muted">
+                                    {% if current_user.created_at %}
+                                        {{ current_user.created_at.strftime('%B %d, %Y') }}
+                                    {% else %}
+                                        Unknown
+                                    {% endif %}
+                                </small>
+                            </div>
+                            <div class="mb-0">
+                                <strong>Last Login:</strong><br>
+                                <small class="text-muted">
+                                    {% if current_user.last_login %}
+                                        {{ current_user.last_login.strftime('%B %d, %Y %H:%M') }}
+                                    {% else %}
+                                        Never
+                                    {% endif %}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Security Tips -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Security Tips</h6>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-unstyled mb-0 small">
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Use a strong, unique password</li>
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Enable two-factor authentication when available</li>
+                                <li class="mb-2"><i class="fas fa-check text-success me-2"></i>Keep your email address up to date</li>
+                                <li class="mb-0"><i class="fas fa-check text-success me-2"></i>Regularly review your account activity</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Password confirmation validation
+document.getElementById('confirm_password').addEventListener('input', function() {
+    const newPassword = document.getElementById('new_password').value;
+    const confirmPassword = this.value;
+
+    if (newPassword && confirmPassword && newPassword !== confirmPassword) {
+        this.setCustomValidity('Passwords do not match');
+    } else {
+        this.setCustomValidity('');
+    }
+});
+
+// Form validation before submit
+document.getElementById('accountSettingsForm').addEventListener('submit', function(e) {
+    const newPassword = document.getElementById('new_password').value;
+    const confirmPassword = document.getElementById('confirm_password').value;
+    const currentPassword = document.getElementById('current_password').value;
+
+    // If new password is provided, current password is required
+    if (newPassword && !currentPassword) {
+        e.preventDefault();
+        alert('Please enter your current password to change your password.');
+        document.getElementById('current_password').focus();
+        return false;
+    }
+
+    // If current password is provided, new password is required
+    if (currentPassword && !newPassword) {
+        e.preventDefault();
+        alert('Please enter a new password.');
+        document.getElementById('new_password').focus();
+        return false;
+    }
+
+    // Validate password strength if provided
+    if (newPassword) {
+        const hasUpperCase = /[A-Z]/.test(newPassword);
+        const hasLowerCase = /[a-z]/.test(newPassword);
+        const hasNumbers = /\d/.test(newPassword);
+        const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(newPassword);
+
+        if (!hasUpperCase || !hasLowerCase || !hasNumbers || !hasSpecialChar) {
+            e.preventDefault();
+            alert('New password must contain at least one uppercase letter, one lowercase letter, one number, and one special character.');
+            return false;
+        }
+    }
+});
+</script>
+
+{% endblock %}

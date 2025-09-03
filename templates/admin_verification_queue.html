@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+
+{% block title %}Verification Queue - The Lotus TCG{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('admin') }}">Admin</a></li>
+                    <li class="breadcrumb-item active">Verification Queue</li>
+                </ol>
+            </nav>
+
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i class="fas fa-clipboard-check me-2"></i>Verification Queue</h2>
+                <a href="{{ url_for('admin_users') }}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Users
+                </a>
+            </div>
+
+            <!-- Queue Statistics -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h3 class="text-warning mb-1">{{ total_pending }}</h3>
+                            <small class="text-muted">Items Pending Verification</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h3 class="text-info mb-1">{{ pending_items|selectattr('verification_status', 'equalto', 'pending')|list|length }}</h3>
+                            <small class="text-muted">In Review</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h3 class="text-secondary mb-1">{{ pending_items|selectattr('verification_status', 'equalto', 'unverified')|list|length }}</h3>
+                            <small class="text-muted">Unverified</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card text-center">
+                        <div class="card-body">
+                            <h3 class="text-success mb-1">{{ pending_items|length }}</h3>
+                            <small class="text-muted">Total in Queue</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% if pending_items %}
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-list me-2"></i>Items Requiring Verification</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th width="50">Image</th>
+                                    <th width="200">Card Name</th>
+                                    <th width="120">Owner</th>
+                                    <th width="80">Set</th>
+                                    <th width="70">Rarity</th>
+                                    <th width="80">Condition</th>
+                                    <th width="60">Qty</th>
+                                    <th width="90">Status</th>
+                                    <th width="100">Added</th>
+                                    <th width="120">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in pending_items %}
+                                <tr>
+                                    <td>
+                                        {% if item.card and item.card.image_url %}
+                                        <img src="{{ item.card.image_url }}" alt="{{ item.card_name }}"
+                                             class="img-thumbnail" style="width: 40px; height: 50px; object-fit: cover;"
+                                             onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNTAiIHZpZXdCb3g9IjAgMCA0MCA1MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjUwIiBmaWxsPSIjZjhmOWZhIi8+CjxwYXRoIGQ9Ik0yMCAyNWMzLjMxNCAwIDYtMi42ODYgNi02cy0yLjY4Ni02LTYtNi02IDIuNjg2LTYgNiAyLjY4NiA2IDYgNnptMCAxMGwxMC03LTEwLTd6IiBmaWxsPSIjZGVlMmU2Ii8+Cjwvc3ZnPgo=';">
+                                        {% else %}
+                                        <div class="bg-light border rounded d-flex align-items-center justify-content-center"
+                                             style="width: 40px; height: 50px; font-size: 10px; color: #6c757d;">
+                                            No Image
+                                        </div>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="fw-bold small">{{ item.card_name }}</div>
+                                        {% if item.card and item.card.description %}
+                                        <div class="text-muted" style="font-size: 11px; line-height: 1.2;">
+                                            {{ item.card.description[:50] }}{% if item.card.description|length > 50 %}...{% endif %}
+                                        </div>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-primary">{{ item.inventory.user.username }}</small>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">{{ item.card_set or 'Unknown' }}</small>
+                                    </td>
+                                    <td>
+                                        {% if item.card_rarity %}
+                                        <span class="badge bg-secondary" style="font-size: 10px;">
+                                            {{ item.card_rarity }}
+                                        </span>
+                                        {% else %}
+                                        <span class="text-muted">Unknown</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small>{{ item.condition }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-info">{{ item.quantity }}</span>
+                                    </td>
+                                    <td>
+                                        {% if item.verification_status == 'pending' %}
+                                        <span class="badge bg-warning text-dark" style="font-size: 10px;">
+                                            <i class="fas fa-clock me-1"></i>Pending
+                                        </span>
+                                        {% else %}
+                                        <span class="badge bg-secondary" style="font-size: 10px;">
+                                            <i class="fas fa-question me-1"></i>Unverified
+                                        </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {% if item.added_at %}
+                                            {{ item.added_at.strftime('%Y-%m-%d') }}
+                                            {% else %}
+                                            N/A
+                                            {% endif %}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="{{ url_for('admin_user_detail', user_id=item.inventory.user.id) }}" class="btn btn-outline-primary btn-sm" title="View User">
+                                                <i class="fas fa-user"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-outline-success btn-sm" onclick="quickVerify({{ item.id }}, {{ item.inventory.user.id }}, 'verified')" title="Quick Verify">
+                                                <i class="fas fa-check"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-warning btn-sm" onclick="quickVerify({{ item.id }}, {{ item.inventory.user.id }}, 'pending')" title="Mark for Review">
+                                                <i class="fas fa-clock"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i class="fas fa-check-circle display-4 text-success mb-3"></i>
+                    <h4>All Caught Up!</h4>
+                    <p class="text-muted mb-0">No items are currently pending verification.</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Quick Verification Modal -->
+<div class="modal fade" id="quickVerifyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Quick Verification</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="quickVerifyForm" method="POST">
+                <div class="modal-body">
+                    <p>Update verification status for: <strong id="itemName"></strong></p>
+                    <div class="mb-3">
+                        <label for="quickStatus" class="form-label">Verification Status</label>
+                        <select class="form-select" id="quickStatus" name="verification_status" required>
+                            <option value="verified">Verified</option>
+                            <option value="pending">Pending Review</option>
+                            <option value="unverified">Unverified</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="quickNotes" class="form-label">Notes (Optional)</label>
+                        <textarea class="form-control" id="quickNotes" name="notes" rows="3" placeholder="Add any verification notes..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Status</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentItemId = null;
+let currentUserId = null;
+
+function quickVerify(itemId, userId, status) {
+    currentItemId = itemId;
+    currentUserId = userId;
+
+    // Set the form action
+    document.getElementById('quickVerifyForm').action = `/admin/users/${userId}/inventory/${itemId}/verify`;
+
+    // Set the status
+    document.getElementById('quickStatus').value = status;
+
+    // Get item name for display
+    const row = document.querySelector(`button[onclick*="quickVerify(${itemId}"]`).closest('tr');
+    const itemName = row.querySelector('td:nth-child(2) .fw-bold').textContent;
+    document.getElementById('itemName').textContent = itemName;
+
+    // Show modal
+    new bootstrap.Modal(document.getElementById('quickVerifyModal')).show();
+}
+
+// Handle form submission
+document.getElementById('quickVerifyForm').addEventListener('submit', function(e) {
+    // The form will submit normally, but we can add loading state
+    const submitBtn = this.querySelector('button[type="submit"]');
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Updating...';
+    submitBtn.disabled = true;
+});
+</script>
+{% endblock %}
