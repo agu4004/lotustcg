@@ -40,7 +40,18 @@
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h3 class="mb-0">{{ card.name }}</h3>
-                    <span class="badge bg-primary fs-6">{{ card.rarity }}</span>
+                    {% set rarity_l = (card.rarity or '') | lower %}
+                    {% if rarity_l == 'majestic' %}
+                        <span class="badge bg-danger fs-6">{{ card.rarity }}</span>
+                    {% elif rarity_l == 'legendary' %}
+                        <span class="badge bg-warning text-dark fs-6">{{ card.rarity }}</span>
+                    {% elif rarity_l == 'promo' %}
+                        <span class="badge bg-success fs-6">{{ card.rarity }}</span>
+                    {% elif rarity_l == 'marvel' %}
+                        <span class="badge fs-6" style="background-color: purple; color: #fff;">{{ card.rarity }}</span>
+                    {% else %}
+                        <span class="badge bg-secondary fs-6">{{ card.rarity }}</span>
+                    {% endif %}
                 </div>
                 <div class="card-body">
                     <div class="row mb-3">
@@ -51,7 +62,18 @@
                     <div class="row mb-3">
                         <div class="col-sm-4"><strong>Rarity:</strong></div>
                         <div class="col-sm-8">
-                            <span class="badge bg-secondary">{{ card.rarity }}</span>
+                            {% set rarity_l = (card.rarity or '') | lower %}
+                            {% if rarity_l == 'majestic' %}
+                                <span class="badge bg-danger">{{ card.rarity }}</span>
+                            {% elif rarity_l == 'legendary' %}
+                                <span class="badge bg-warning text-dark">{{ card.rarity }}</span>
+                            {% elif rarity_l == 'promo' %}
+                                <span class="badge bg-success">{{ card.rarity }}</span>
+                            {% elif rarity_l == 'marvel' %}
+                                <span class="badge" style="background-color: purple; color: #fff;">{{ card.rarity }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ card.rarity }}</span>
+                            {% endif %}
                         </div>
                     </div>
                     
@@ -172,16 +194,76 @@
         </div>
     </div>
     
-    <!-- Related Cards Section (placeholder) -->
+    <!-- Related Cards Section -->
     <div class="mt-5">
         <h4>More from {{ card.set_name }}</h4>
+        {% if related_cards %}
+        <div class="row mt-3">
+            {% for c in related_cards %}
+            <div class="col-xl-4 col-lg-6 col-md-6 mb-4">
+                <div class="card h-100{% if c.quantity == 0 %} border-warning{% endif %}">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <strong class="text-truncate me-2">{{ c.name }}</strong>
+                        <div class="d-flex gap-1">
+                            {% set rarity_l = (c.rarity or '') | lower %}
+                            {% if rarity_l == 'majestic' %}
+                                <span class="badge bg-danger">{{ c.rarity }}</span>
+                            {% elif rarity_l == 'legendary' %}
+                                <span class="badge bg-warning text-dark">{{ c.rarity }}</span>
+                            {% elif rarity_l == 'promo' %}
+                                <span class="badge bg-success">{{ c.rarity }}</span>
+                            {% elif rarity_l == 'marvel' %}
+                                <span class="badge" style="background-color: purple; color: #fff;">{{ c.rarity }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary">{{ c.rarity }}</span>
+                            {% endif %}
+                            {% if c.quantity == 0 %}
+                            <span class="badge bg-warning text-dark">Out of Stock</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="card-body text-center">
+                        {% if c.image_url %}
+                        <img src="{{ c.image_url }}" alt="{{ c.name }}"
+                             class="img-fluid rounded" style="height: 160px; width: auto; max-width: 100%; object-fit: contain;"
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                        <div style="display: none;">
+                            <i class="fas fa-image display-6 text-muted"></i>
+                            <p class="text-muted small mt-1">No Image</p>
+                        </div>
+                        {% else %}
+                        <i class="fas fa-image display-6 text-muted"></i>
+                        <p class="text-muted small mt-1">No Image</p>
+                        {% endif %}
+                        <div class="small mt-2">
+                            <p class="mb-1"><strong>Price:</strong> <span class="text-success fw-bold">{{ "{:,.0f}".format(c.price) }} VND</span></p>
+                            <p class="mb-1"><strong>Available:</strong>
+                                {% if c.quantity > 0 %}
+                                    <span class="text-success">{{ c.quantity }} copies</span>
+                                {% else %}
+                                    <span class="text-danger">Out of Stock</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    <div class="card-footer d-flex gap-2">
+                        <a href="{{ url_for('card_detail', card_id=c.id) }}" class="btn btn-outline-primary btn-sm w-100">
+                            <i class="fas fa-eye me-1"></i>Details
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
         <div class="text-center py-4">
             <i class="fas fa-magic text-muted display-4 mb-3"></i>
-            <p class="text-muted">Related cards would appear here in a full implementation.</p>
+            <p class="text-muted">No other cards found from this set.</p>
             <a href="{{ url_for('catalog', set=card.set_name) }}" class="btn btn-outline-primary">
                 <i class="fas fa-search me-2"></i>Browse {{ card.set_name }}
             </a>
         </div>
+        {% endif %}
     </div>
 </div>
 

@@ -5,7 +5,7 @@ import os
 from datetime import datetime, timedelta
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import String, Integer, Numeric, DateTime, Text, func, ForeignKey
+from sqlalchemy import String, Integer, Numeric, DateTime, Text, func, ForeignKey, BigInteger, CheckConstraint, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -32,6 +32,14 @@ class User(UserMixin, db.Model):
     password_reset_expires: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     two_factor_enabled: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)
     two_factor_secret: Mapped[str] = mapped_column(String(256), nullable=True)
+    # Contact and address fields
+    full_name: Mapped[str] = mapped_column(String(100), nullable=True)
+    phone_number: Mapped[str] = mapped_column(String(20), nullable=True)
+    address_line: Mapped[str] = mapped_column(Text, nullable=True)
+    address_city: Mapped[str] = mapped_column(String(100), nullable=True)
+    address_province: Mapped[str] = mapped_column(String(100), nullable=True)
+    address_postal_code: Mapped[str] = mapped_column(String(20), nullable=True)
+    address_country: Mapped[str] = mapped_column(String(100), nullable=True, default='Vietnam')
     # Temporarily comment out these columns until database is updated
     # login_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # locked_until: Mapped[datetime] = mapped_column(DateTime, nullable=True)
@@ -208,7 +216,7 @@ class Card(db.Model):
     set_name: Mapped[str] = mapped_column(String(80), nullable=False, default='Unknown')
     rarity: Mapped[str] = mapped_column(String(20), nullable=False, default='Common')
     condition: Mapped[str] = mapped_column(String(20), nullable=False, default='Near Mint')
-    price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False, default=0.0)
+    price: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False, default=0.0)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     description: Mapped[str] = mapped_column(Text, nullable=True)
     image_url: Mapped[str] = mapped_column(String(500), nullable=True)
@@ -217,6 +225,14 @@ class Card(db.Model):
     is_deleted: Mapped[bool] = mapped_column(db.Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    __table_args__ = (
+        # Prevent duplicate CREDIT denominations across canonical attributes we track
+        Index(
+            'ux_credit_card_denom',
+            'set_name', 'price', 'foiling', 'rarity', 'art_style', unique=True,
+            postgresql_where=db.text("set_name = 'CREDIT'")
+        ),
+    )
     
     def to_dict(self):
         """Convert card to dictionary for templates"""
@@ -246,11 +262,19 @@ class Card(db.Model):
         """String representation of card"""
         return f"Card: {self.name} ({self.set_name}) - {self.price} VND"
 
+    @property
+    def is_credit(self) -> bool:
+        return self.set_name == 'CREDIT'
+
 
 class Order(db.Model):
     __tablename__ = "orders"
 
     id: Mapped[str] = mapped_column(String(20), primary_key=True)  # e.g., ORD-20240101-001
+    # Human-friendly order number for display (can mirror id)
+    order_number: Mapped[str] = mapped_column(String(30), nullable=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), nullable=True)
+    email: Mapped[str] = mapped_column(String(120), nullable=True)
     customer_name: Mapped[str] = mapped_column(String(100), nullable=False)
     contact_number: Mapped[str] = mapped_column(String(20), nullable=False)
     facebook_details: Mapped[str] = mapped_column(Text, nullable=True)
@@ -277,6 +301,7 @@ class Order(db.Model):
 
     # Relationship to order items
     items = relationship('OrderItem', backref='order', lazy=True, cascade='all, delete-orphan')
+    user = relationship('User')
     coupon = relationship('Coupon')  # Relationship to applied coupon
 
     def to_dict(self):
@@ -314,12 +339,18 @@ class OrderItem(db.Model):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     order_id: Mapped[str] = mapped_column(String(20), ForeignKey('orders.id'), nullable=False)
     card_id: Mapped[int] = mapped_column(Integer, ForeignKey('cards.id'), nullable=False)
+    # Link back to a user inventory item when the order line originates from a user-listed item
+    inventory_item_id: Mapped[int] = mapped_column(Integer, ForeignKey('inventory_items.id'), nullable=True)
+    # Seller user id for user-listed items (None for store/admin items)
+    seller_user_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), nullable=True)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     unit_price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     total_price: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
 
     # Relationship to card
     card = relationship('Card', backref='order_items')
+    inventory_item = relationship('InventoryItem', foreign_keys=[inventory_item_id])
+    seller = relationship('User', foreign_keys=[seller_user_id])
 
     def to_dict(self):
         """Convert order item to dictionary for templates"""
@@ -327,6 +358,8 @@ class OrderItem(db.Model):
             'id': self.id,
             'order_id': self.order_id,
             'card_id': self.card_id,
+            'inventory_item_id': self.inventory_item_id,
+            'seller_user_id': self.seller_user_id,
             'quantity': self.quantity,
             'unit_price': float(self.unit_price),
             'total_price': float(self.total_price),
@@ -360,6 +393,10 @@ class UserInventory(db.Model):
 class InventoryItem(db.Model):
     """Individual item in a user's inventory"""
     __tablename__ = "inventory_items"
+    __table_args__ = (
+        CheckConstraint('quantity >= 0', name='chk_qty_nonneg'),
+        Index('ix_inventory_items_market', 'listed_for_sale', 'is_verified', 'quantity'),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     inventory_id: Mapped[int] = mapped_column(Integer, ForeignKey('user_inventories.id'), nullable=False)
@@ -378,6 +415,7 @@ class InventoryItem(db.Model):
     foil_type: Mapped[str] = mapped_column(String(20), nullable=True, default='Non Foil')  # Specific foil type
     is_mint: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=True)  # Mint condition flag
     is_public: Mapped[bool] = mapped_column(db.Boolean, default=True, nullable=False)  # Whether item appears in public inventory
+    listed_for_sale: Mapped[bool] = mapped_column(db.Boolean, default=False, nullable=False)  # Whether item appears in shop
 
     # Relationships
     inventory = relationship("UserInventory", back_populates="items")
@@ -490,6 +528,7 @@ class InventoryItem(db.Model):
             'foil_type': self.foil_type,
             'is_mint': self.is_mint,
             'is_public': self.is_public,
+            'listed_for_sale': self.listed_for_sale,
             'card_image': self.card.image_url if self.card else None,
             'owner_username': self.owner.username if self.owner else None,
             'verifier_username': self.verifier.username if self.verifier else None
@@ -544,6 +583,85 @@ class InventoryItem(db.Model):
     def __str__(self) -> str:
         """String representation of inventory item"""
         return f"InventoryItem: {self.card_name} x{self.quantity} ({self.condition})"
+
+
+class ShopInventoryItem(db.Model):
+    """Consigned inventory moved into shop for sale, retaining original owner."""
+    __tablename__ = 'shop_inventory_items'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    card_id: Mapped[int] = mapped_column(Integer, ForeignKey('cards.id'), nullable=False, index=True)
+    from_user_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    source_inventory_item_id: Mapped[int] = mapped_column(Integer, ForeignKey('inventory_items.id'), nullable=True)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    card = relationship('Card')
+    from_user = relationship('User', foreign_keys=[from_user_id])
+    source_item = relationship('InventoryItem', foreign_keys=[source_inventory_item_id])
+
+    def __str__(self) -> str:
+        return f"ShopStock: {self.card.name if self.card else self.card_id} x{self.quantity} (from {self.from_user.username if self.from_user else self.from_user_id})"
+
+
+class ShopConsignmentLog(db.Model):
+    """History of items sent to or returned from shop (consignment)."""
+    __tablename__ = 'shop_consignment_logs'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    card_id: Mapped[int] = mapped_column(Integer, ForeignKey('cards.id'), nullable=False, index=True)
+    from_user_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    source_inventory_item_id: Mapped[int] = mapped_column(Integer, ForeignKey('inventory_items.id'), nullable=True)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    action: Mapped[str] = mapped_column(String(10), nullable=False)  # 'list' or 'unlist'
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    card = relationship('Card')
+    from_user = relationship('User', foreign_keys=[from_user_id])
+    source_item = relationship('InventoryItem', foreign_keys=[source_inventory_item_id])
+
+class CreditLedger(db.Model):
+    """Balanced ledger for credit issuance, transfers, and redemptions."""
+    __tablename__ = 'credit_ledger'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), nullable=False)
+    entry_ts: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    amount_vnd: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    direction: Mapped[str] = mapped_column(String(10), nullable=False)  # 'debit' or 'credit'
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)  # 'issue','redeem','transfer_in','transfer_out','revoke','adjust'
+    related_order_id: Mapped[int] = mapped_column(Integer, nullable=True)
+    related_inventory_item_id: Mapped[int] = mapped_column(Integer, ForeignKey('inventory_items.id'), nullable=True)
+    admin_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), nullable=True)
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=True, unique=False)
+    notes: Mapped[str] = mapped_column(Text, nullable=True)
+
+    user = relationship("User", foreign_keys=[user_id])
+    admin = relationship("User", foreign_keys=[admin_id])
+    inventory_item = relationship("InventoryItem", foreign_keys=[related_inventory_item_id])
+
+    __table_args__ = (
+        CheckConstraint('amount_vnd > 0', name='chk_credit_amount_positive'),
+        CheckConstraint("direction in ('debit','credit')", name='chk_credit_direction'),
+        CheckConstraint("kind in ('issue','redeem','transfer_in','transfer_out','revoke','adjust')", name='chk_credit_kind'),
+        Index('ix_credit_ledger_user_ts', 'user_id', 'entry_ts'),
+        Index('ux_credit_ledger_idem', 'idempotency_key', unique=True, postgresql_where=db.text('idempotency_key is not null')),
+    )
+
+
+class IdempotencyKey(db.Model):
+    """Simple DB-backed idempotency key registry to prevent replay across operations."""
+    __tablename__ = 'idempotency_keys'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    key: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=True)
+    # Optional fields to aid debugging
+    scope: Mapped[str] = mapped_column(String(100), nullable=True)
+    request_fingerprint: Mapped[str] = mapped_column(String(255), nullable=True)
 
 
 class TradeOffer(db.Model):
@@ -880,6 +998,40 @@ class VerificationAuditLog(db.Model):
         """String representation of verification audit log"""
         return f"VerificationLog: {self.admin.username} {self.action} item {self.inventory_item_id}"
 
+
+class InventoryTransferLog(db.Model):
+    """Audit log for item transfers between users (credit and non-credit)."""
+    __tablename__ = 'inventory_transfer_logs'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    from_user_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    to_user_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), nullable=False, index=True)
+    card_id: Mapped[int] = mapped_column(Integer, ForeignKey('cards.id'), nullable=False, index=True)
+    quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_credit: Mapped[bool] = mapped_column(db.Boolean, nullable=False, default=False)
+    idempotency_key: Mapped[str] = mapped_column(String(255), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
+
+    # Relationships
+    from_user = relationship('User', foreign_keys=[from_user_id])
+    to_user = relationship('User', foreign_keys=[to_user_id])
+    card = relationship('Card')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'from_user_id': self.from_user_id,
+            'to_user_id': self.to_user_id,
+            'from_username': self.from_user.username if self.from_user else None,
+            'to_username': self.to_user.username if self.to_user else None,
+            'card_id': self.card_id,
+            'card_name': self.card.name if self.card else None,
+            'card_set': self.card.set_name if self.card else None,
+            'quantity': self.quantity,
+            'is_credit': self.is_credit,
+            'idempotency_key': self.idempotency_key,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
 
 def initialize_default_users():
     """Initialize default admin and test users if they don't exist"""

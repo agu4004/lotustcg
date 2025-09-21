@@ -14,8 +14,13 @@
                     </a>
                     {% if order.status == 'pending' %}
                     <form method="POST" action="{{ url_for('admin_fulfill_order', order_id=order.id) }}" class="d-inline me-2">
-                        <button type="submit" class="btn btn-success" onclick="return confirm('Mark this order as fulfilled?')">
-                            <i class="fas fa-check me-2"></i>Fulfill Order
+                        <button type="submit" class="btn btn-success" onclick="return confirm('Mark this order as confirmed?')">
+                            <i class="fas fa-check me-2"></i>Confirm Order
+                        </button>
+                    </form>
+                    <form method="POST" action="{{ url_for('admin_ship_order', order_id=order.id) }}" class="d-inline me-2">
+                        <button type="submit" class="btn btn-primary" onclick="return confirm('Mark this order as shipped?')">
+                            <i class="fas fa-truck me-2"></i>Mark Shipped
                         </button>
                     </form>
                     <form method="POST" action="{{ url_for('admin_reject_order', order_id=order.id) }}" class="d-inline">
@@ -36,9 +41,12 @@
                     {% if order.status == 'pending' %}
                     <span class="badge bg-warning fs-6 me-3">Pending</span>
                     <span>This order is awaiting processing.</span>
-                    {% elif order.status == 'fulfilled' %}
-                    <span class="badge bg-success fs-6 me-3">Fulfilled</span>
-                    <span>This order has been completed successfully.</span>
+                    {% elif order.status == 'confirmed' %}
+                    <span class="badge bg-success fs-6 me-3">Confirmed</span>
+                    <span>This order has been confirmed.</span>
+                    {% elif order.status == 'shipped' %}
+                    <span class="badge bg-info fs-6 me-3">Shipped</span>
+                    <span>This order has been shipped.</span>
                     {% elif order.status == 'rejected' %}
                     <span class="badge bg-danger fs-6 me-3">Rejected</span>
                     <span>This order has been cancelled.</span>
@@ -163,11 +171,15 @@
                                                     <div class="bg-light border rounded me-2 d-flex align-items-center justify-content-center"
                                                          style="width: 40px; height: 50px; font-size: 10px; color: #6c757d;">
                                                         No Image
-                                                    </div>
+                                                        <br>
+                                                        
+                                                        <small class="text-muted">Seller: {{ item.seller or 'Lotus TCG Store' }}</small>
+                                                     </div>
                                                     {% endif %}
                                                     <div>
                                                         <strong>{{ item.card.name }}</strong><br>
-                                                        <small class="text-muted">{{ item.card.set_name }} • {{ item.card.condition }}</small>
+                                                        <small class="text-muted">{{ item.card.set_name }} • {{ item.card.condition }} • {{ item.foiling or (item.card.foiling if item.card else 'N/A') }} • {{ item.art_style or (item.card.art_style if item.card else 'N/A') }}</small><br>
+                                                        
                                                     </div>
                                                 </div>
                                             </td>
@@ -199,8 +211,13 @@
                         <div class="card-body d-grid gap-2">
                             {% if order.status == 'pending' %}
                             <form method="POST" action="{{ url_for('admin_fulfill_order', order_id=order.id) }}">
-                                <button type="submit" class="btn btn-success w-100" onclick="return confirm('Mark this order as fulfilled?')">
-                                    <i class="fas fa-check me-2"></i>Fulfill Order
+                                <button type="submit" class="btn btn-success w-100" onclick="return confirm('Mark this order as confirmed?')">
+                                    <i class="fas fa-check me-2"></i>Confirm Order
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ url_for('admin_ship_order', order_id=order.id) }}">
+                                <button type="submit" class="btn btn-primary w-100" onclick="return confirm('Mark this order as shipped?')">
+                                    <i class="fas fa-truck me-2"></i>Mark Shipped
                                 </button>
                             </form>
                             <form method="POST" action="{{ url_for('admin_reject_order', order_id=order.id) }}">
@@ -259,10 +276,10 @@
                                 </div>
                                 {% if order.status != 'pending' %}
                                 <div class="timeline-item">
-                                    <div class="timeline-marker bg-{{ 'success' if order.status == 'fulfilled' else 'danger' }}"></div>
+                                    <div class="timeline-marker bg-{{ 'success' if order.status == 'confirmed' else ('info' if order.status == 'shipped' else 'danger') }}"></div>
                                     <div class="timeline-content">
                                         <h6 class="timeline-title">
-                                            {% if order.status == 'fulfilled' %}Order Fulfilled{% else %}Order Rejected{% endif %}
+                                            {% if order.status == 'confirmed' %}Order Confirmed{% elif order.status == 'shipped' %}Order Shipped{% else %}Order Rejected{% endif %}
                                         </h6>
                                         <p class="timeline-text">
                                             {% if order.updated_at %}

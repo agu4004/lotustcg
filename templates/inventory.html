@@ -14,6 +14,12 @@
                 </div>
                 <div class="text-end">
                     <span class="badge bg-info fs-6">{{ total_items }} total items</span>
+                    <a href="{{ url_for('inventory_consigned') }}" class="btn btn-outline-secondary btn-sm ms-2">
+                        <i class="fas fa-warehouse me-1"></i>Sent to Shop
+                    </a>
+                    <a href="{{ url_for('my_transfer_history') }}" class="btn btn-outline-primary btn-sm ms-2">
+                        <i class="fas fa-history me-1"></i>Transfer History
+                    </a>
                 </div>
             </div>
 
@@ -239,7 +245,7 @@
             <!-- Bulk Actions -->
             <div class="card mb-4" id="bulkActions" style="display: none;">
                 <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
                             <span id="selectedCount">0</span> items selected
                         </div>
@@ -251,6 +257,61 @@
                                 <i class="fas fa-times me-1"></i>Clear Selection
                             </button>
                         </div>
+                    </div>
+
+                    <!-- Withdraw Controls -->
+                    <div class="border rounded p-3">
+                        <div class="mb-2"><strong><i class="fas fa-dolly me-2"></i>Withdraw Selected Items</strong></div>
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-12">
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="withdrawMethod" id="withdrawPickup" value="pickup" checked onchange="toggleWithdrawMethod()">
+                                    <label class="form-check-label" for="withdrawPickup">Pickup</label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="withdrawMethod" id="withdrawShipping" value="shipping" onchange="toggleWithdrawMethod()">
+                                    <label class="form-check-label" for="withdrawShipping">Shipping</label>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6" id="pickupFields">
+                                <label for="pickupLocation" class="form-label">Pickup Location</label>
+                                <select class="form-select" id="pickupLocation">
+                                    <option value="Iron Hammer">Iron Hammer</option>
+                                    <option value="Floating Dojo">Floating Dojo</option>
+                                </select>
+                            </div>
+
+                            <div class="col-md-6 d-none" id="shippingFields">
+                                <div class="row g-2">
+                                    <div class="col-12">
+                                        <label class="form-label" for="shipAddress">Address</label>
+                                        <input type="text" class="form-control" id="shipAddress" placeholder="Leave blank to use your profile address">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="shipCity">City</label>
+                                        <input type="text" class="form-control" id="shipCity" placeholder="Use profile if blank">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="shipProvince">Province</label>
+                                        <input type="text" class="form-control" id="shipProvince" placeholder="Use profile if blank">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="shipPostal">Postal Code</label>
+                                        <input type="text" class="form-control" id="shipPostal" placeholder="Use profile if blank">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="shipCountry">Country</label>
+                                        <input type="text" class="form-control" id="shipCountry" value="Vietnam">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-12 mt-2">
+                                <button class="btn btn-primary" onclick="withdrawSelected()"><i class="fas fa-truck-loading me-1"></i>Withdraw Selected</button>
+                            </div>
+                        </div>
+                        <div class="form-text mt-2">Set per-item withdrawal quantities in each card below.</div>
                     </div>
                 </div>
             </div>
@@ -264,7 +325,9 @@
                            <div class="card-header">
                                <div class="d-flex align-items-center">
                                    <input type="checkbox" class="form-check-input me-2 item-checkbox flex-shrink-0"
-                                          value="{{ item.id }}" onchange="updateBulkActions()">
+                                          value="{{ item.id }}"
+                                          data-verified="{{ 'true' if (item.is_verified or item.verification_status == 'verified') else 'false' }}"
+                                          onchange="updateBulkActions()">
                                    <strong class="text-truncate flex-grow-1">{{ item.card_name }}</strong>
                                </div>
                            </div>
@@ -313,7 +376,13 @@
                                     <p class="mb-1"><strong>Rarity:</strong>
                                         <span class="badge bg-light text-dark">{{ item.card_rarity }}</span>
                                     </p>
-                                    <p class="mb-1"><strong>Quantity:</strong> {{ item.quantity }}</p>
+                                    <p class="mb-1 d-flex align-items-center justify-content-between">
+                                        <span><strong>Quantity:</strong> <span id="qtyVal{{ item.id }}">{{ item.quantity }}</span></span>
+                                        <span class="ms-2">
+                                            <label for="withdrawQty{{ item.id }}" class="form-label me-1 mb-0 small">Withdraw</label>
+                                            <input type="number" class="form-control d-inline-block" style="width: 90px;" id="withdrawQty{{ item.id }}" min="1" max="{{ item.quantity }}" value="1">
+                                        </span>
+                                    </p>
                                     <p class="mb-1"><strong>Market Price:</strong>
                                         <span class="text-muted">{{ "{:,.0f}".format(item.card_price) }} VND</span>
                                     </p>
@@ -327,21 +396,41 @@
                                             <span class="badge bg-secondary">Private</span>
                                         {% endif %}
                                     </p>
+                                    {% if item.card_set != 'CREDIT' %}
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input" type="checkbox" id="listToggle{{ item.id }}" {% if item.listed_for_sale %}checked{% endif %}
+                                               onchange="onListToggleChange({{ item.id }}, this.checked)">
+                                        <label class="form-check-label" for="listToggle{{ item.id }}">List for sale in shop</label>
+                                    </div>
+                                    <div class="input-group input-group-sm mb-2" id="listQtyWrap{{ item.id }}" style="display: none; max-width: 260px;">
+                                        <span class="input-group-text">Qty</span>
+                                        <input type="number" class="form-control" id="listQty{{ item.id }}" min="1" max="{{ item.quantity }}" value="{{ item.quantity }}">
+                                        <button class="btn btn-outline-primary" type="button" onclick="listSendToShop({{ item.id }})">Send</button>
+                                    </div>
+                                    {% else %}
+                                    <div class="text-muted small">Listing disabled for credit tokens.</div>
+                                    {% endif %}
                                 </div>
                             </div>
                            <div class="card-footer">
                                <div class="row g-2">
-                                   <div class="col-6">
+                                   <div class="col-4">
                                        <a href="{{ url_for('view_inventory_item', item_id=item.id) }}"
                                           class="btn btn-outline-primary btn-sm w-100">
                                            <i class="fas fa-eye me-1"></i>Details
                                        </a>
                                    </div>
-                                   <div class="col-6">
+                                   <div class="col-4">
                                        <a href="{{ url_for('edit_inventory_item', item_id=item.id) }}"
                                           class="btn btn-outline-secondary btn-sm w-100">
                                            <i class="fas fa-edit me-1"></i>Edit
                                        </a>
+                                   </div>
+                                   <div class="col-4">
+                                       <button class="btn btn-outline-success btn-sm w-100" type="button"
+                                               onclick="openTransferModal({{ item.id }}, '{{ item.card_name|replace("'","\'") }}', {{ item.quantity }})">
+                                           <i class="fas fa-exchange-alt me-1"></i>Transfer
+                                       </button>
                                    </div>
                                </div>
                            </div>
@@ -363,6 +452,43 @@
         </div>
     </div>
 </div>
+
+<!-- Transfer Modal -->
+<div class="modal fade" id="transferModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-exchange-alt me-2"></i>Transfer Item</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="transferItemId" />
+        <div class="mb-3">
+          <label class="form-label">Item</label>
+          <div class="form-control" id="transferItemName" readonly></div>
+        </div>
+        <div class="mb-3">
+          <label for="transferToUsername" class="form-label">Recipient Username</label>
+          <input type="text" class="form-control" id="transferToUsername" list="userSuggestionList" placeholder="e.g., john_doe">
+          <datalist id="userSuggestionList"></datalist>
+        </div>
+        <div class="mb-1">
+          <label for="transferQty" class="form-label">Quantity</label>
+          <input type="number" class="form-control" id="transferQty" min="1" value="1">
+          <div class="form-text">Available: <span id="transferAvail">0</span></div>
+        </div>
+        <div class="small text-muted mt-2">
+          Note: Verified status is preserved on transfer.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="submitTransfer()">Confirm Transfer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -491,6 +617,87 @@ function bulkDelete() {
 
 
 // Existing functions
+function toggleWithdrawMethod() {
+    const pickup = document.getElementById('withdrawPickup').checked;
+    const pickupFields = document.getElementById('pickupFields');
+    const shippingFields = document.getElementById('shippingFields');
+    if (pickup) {
+        pickupFields.classList.remove('d-none');
+        shippingFields.classList.add('d-none');
+    } else {
+        pickupFields.classList.add('d-none');
+        shippingFields.classList.remove('d-none');
+    }
+}
+
+function withdrawSelected() {
+    if (selectedItems.size === 0) {
+        showMessage('Please select items to withdraw.', 'warning');
+        return;
+    }
+
+    // Validate that all selected items are verified before submitting
+    const invalid = [];
+    selectedItems.forEach((id) => {
+        const cb = document.querySelector('.item-checkbox[value="' + id + '"]');
+        const isVerified = cb && cb.dataset && cb.dataset.verified === 'true';
+        if (!isVerified) invalid.push(id);
+    });
+    if (invalid.length > 0) {
+        // Popup notification for unverified selection
+        alert('Some selected items are not verified and cannot be withdrawn. Please deselect unverified items.');
+        showMessage('Withdrawal blocked: unverified items selected.', 'error');
+        return;
+    }
+
+    const method = document.querySelector('input[name="withdrawMethod"]:checked')?.value || 'pickup';
+    const payload = { items: [], shipment_method: method };
+
+    if (method === 'pickup') {
+        payload.pickup_location = document.getElementById('pickupLocation').value;
+    } else {
+        payload.shipping = {
+            address: (document.getElementById('shipAddress').value || '').trim(),
+            city: (document.getElementById('shipCity').value || '').trim(),
+            province: (document.getElementById('shipProvince').value || '').trim(),
+            postal_code: (document.getElementById('shipPostal').value || '').trim(),
+            country: (document.getElementById('shipCountry').value || '').trim(),
+        };
+    }
+
+    selectedItems.forEach((id) => {
+        const qtyInput = document.getElementById('withdrawQty' + id);
+        let qty = 1;
+        if (qtyInput) {
+            qty = parseInt(qtyInput.value) || 1;
+            if (qty < 1) qty = 1;
+        }
+        payload.items.push({ inventory_item_id: id, quantity: qty });
+    });
+
+    // Submit to API
+    fetch('/inventory/withdraw', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: JSON.stringify(payload),
+    })
+        .then((r) => r.json())
+        .then((data) => {
+            if (data.success) {
+                showMessage('Withdrawal successful.', 'success');
+                setTimeout(() => window.location.reload(), 800);
+            } else {
+                showMessage(data.error || 'Failed to withdraw items.', 'error');
+            }
+        })
+        .catch((err) => {
+            console.error('Withdraw error', err);
+            showMessage('An error occurred during withdrawal.', 'error');
+        });
+}
 function toggleInventoryVisibility() {
     const toggle = document.getElementById('publicToggle');
     const label = document.querySelector('label[for="publicToggle"]');
@@ -805,6 +1012,245 @@ document.getElementById('publicToggle').addEventListener('change', function() {
         this.disabled = false;
     }, 1000);
 });
+
+// Simple listing toggle for marketplace
+function setListForSale(itemId, listed, qty) {
+    const payload = { listed: !!listed };
+    if (listed && qty && Number(qty) > 0) {
+        payload.quantity = Number(qty);
+    }
+    fetch(`/api/inventory/item/${itemId}/list`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json())
+    .then(data => {
+        const cb = document.getElementById(`listToggle${itemId}`);
+        const wrap = document.getElementById(`listQtyWrap${itemId}`);
+        if (!data || !data.success) {
+            if (cb) cb.checked = !listed;
+            showMessage && showMessage(data?.error || 'Failed to update listing status.', 'error');
+            return;
+        }
+        // Success paths: if we moved qty, auto uncheck and hide controls
+        if (typeof data.moved !== 'undefined' && data.moved > 0) {
+            if (cb) cb.checked = false;
+            if (wrap) wrap.style.display = 'none';
+            showMessage && showMessage(`Sent ${data.moved} to shop`, 'success');
+            // Update on-card quantity and related inputs
+            try {
+                const qtyEl = document.getElementById(`qtyVal${itemId}`);
+                if (qtyEl) {
+                    const currentQty = parseInt(qtyEl.textContent || '0') || 0;
+                    const newQty = Math.max(0, currentQty - Number(data.moved));
+                    qtyEl.textContent = newQty;
+                }
+                const wInp = document.getElementById(`withdrawQty${itemId}`);
+                if (wInp) {
+                    const newMax = Math.max(0, parseInt(wInp.max || '0') - Number(data.moved));
+                    wInp.max = String(newMax);
+                    if (parseInt(wInp.value || '1') > newMax) {
+                        wInp.value = newMax > 0 ? String(newMax) : '1';
+                    }
+                }
+                const lInp = document.getElementById(`listQty${itemId}`);
+                if (lInp) {
+                    const currentMax = parseInt(lInp.max || '0') || 0;
+                    const newMax2 = Math.max(0, currentMax - Number(data.moved));
+                    lInp.max = String(newMax2);
+                    lInp.value = String(newMax2 > 0 ? newMax2 : 0);
+                }
+                // Update header total items badge if present
+                const totalBadge = document.querySelector('.badge.bg-info.fs-6');
+                if (totalBadge) {
+                    const m = totalBadge.textContent.match(/(\d+)/);
+                    if (m) {
+                        const totalNow = Math.max(0, parseInt(m[1]) - Number(data.moved));
+                        totalBadge.textContent = `${totalNow} total items`;
+                    }
+                }
+            } catch (e) { /* no-op */ }
+            // Broadcast to other tabs (e.g., admin) to update admin stock display
+            try {
+                if (data.card_id) {
+                    const payload = { ts: Date.now(), card_id: data.card_id, admin_delta: Number(data.moved) };
+                    localStorage.setItem('qty_update', JSON.stringify(payload));
+                }
+            } catch (e) { /* ignore */ }
+            return;
+        }
+        // Unlist success
+        if (cb) cb.checked = false;
+        if (wrap) wrap.style.display = 'none';
+        showMessage && showMessage('Unlisted successfully', 'success');
+    })
+    .catch(err => {
+        const cb = document.getElementById(`listToggle${itemId}`);
+        if (cb) cb.checked = !listed;
+        console.error('Error updating listing:', err);
+        showMessage && showMessage('An error occurred while updating listing status.', 'error');
+    });
+}
+
+function onListToggleChange(itemId, checked) {
+    const wrap = document.getElementById(`listQtyWrap${itemId}`);
+    if (checked) {
+        if (wrap) {
+            wrap.style.display = 'flex';
+            const inp = document.getElementById(`listQty${itemId}`);
+            if (inp) inp.focus();
+        }
+    } else {
+        if (wrap) wrap.style.display = 'none';
+        setListForSale(itemId, false);
+    }
+}
+
+function listSendToShop(itemId) {
+    const inp = document.getElementById(`listQty${itemId}`);
+    const qty = inp ? Number(inp.value) : undefined;
+    setListForSale(itemId, true, qty);
+}
+
+// ---------------------------
+// Transfer UI Logic
+// ---------------------------
+let transferModalInstance = null;
+let transferMaxQty = 0;
+
+function openTransferModal(itemId, itemName, maxQty) {
+    transferMaxQty = parseInt(maxQty) || 0;
+    document.getElementById('transferItemId').value = itemId;
+    document.getElementById('transferItemName').textContent = itemName;
+    const qtyInput = document.getElementById('transferQty');
+    qtyInput.value = (transferMaxQty > 0 ? 1 : 0);
+    qtyInput.max = transferMaxQty;
+    document.getElementById('transferAvail').textContent = transferMaxQty;
+
+    const modalEl = document.getElementById('transferModal');
+    transferModalInstance = transferModalInstance || new bootstrap.Modal(modalEl);
+    transferModalInstance.show();
+}
+
+function submitTransfer() {
+    const itemId = parseInt(document.getElementById('transferItemId').value);
+    const toUsername = document.getElementById('transferToUsername').value.trim();
+    const qty = parseInt(document.getElementById('transferQty').value);
+
+    if (!toUsername) {
+        showMessage('Please enter recipient username', 'warning');
+        return;
+    }
+    if (!qty || qty <= 0) {
+        showMessage('Please enter a valid quantity', 'warning');
+        return;
+    }
+    if (qty > transferMaxQty) {
+        showMessage('Quantity exceeds available amount', 'warning');
+        return;
+    }
+
+    const idem = 'tx-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+    const payload = {
+        from_user_id: {{ current_user.id if current_user.is_authenticated else 'null' }},
+        inventory_item_id: itemId,
+        to_username: toUsername,
+        quantity: qty
+    };
+
+    fetch('/inventory/transfer', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': idem
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(r => r.json().then(j => ({ ok: r.ok, status: r.status, body: j })))
+    .then(({ ok, status, body }) => {
+        if (ok && body && body.success) {
+            // Update UI quantity
+            const qtyEl = document.getElementById('qtyVal' + itemId);
+            if (qtyEl) {
+                const current = parseInt(qtyEl.textContent) || transferMaxQty;
+                const next = Math.max(0, current - qty);
+                qtyEl.textContent = next;
+            }
+            showMessage('Transfer successful', 'success');
+            if (transferModalInstance) transferModalInstance.hide();
+            // Refresh if zero left
+            if (qtyEl && parseInt(qtyEl.textContent) === 0) {
+                setTimeout(() => window.location.reload(), 500);
+            }
+        } else {
+            const msg = (body && (body.message || body.error)) ? (body.message || body.error) : 'Transfer failed';
+            showMessage(msg, 'danger');
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        showMessage('Unexpected error during transfer', 'danger');
+    });
+}
+
+// ---------------------------
+// Username autocomplete (datalist)
+// ---------------------------
+let _userSearchTimer = null;
+const _userCache = new Map();
+
+function _debounceUserSearch(fn, delay=200) {
+    return (...args) => {
+        if (_userSearchTimer) clearTimeout(_userSearchTimer);
+        _userSearchTimer = setTimeout(() => fn(...args), delay);
+    };
+}
+
+function _renderUserSuggestions(users) {
+    const list = document.getElementById('userSuggestionList');
+    if (!list) return;
+    list.innerHTML = '';
+    users.forEach(u => {
+        const opt = document.createElement('option');
+        opt.value = u.username;
+        opt.label = u.full_name ? `${u.username} — ${u.full_name}` : u.username;
+        list.appendChild(opt);
+    });
+}
+
+const _doUserSearch = _debounceUserSearch((q) => {
+    const key = q.toLowerCase();
+    if (_userCache.has(key)) {
+        _renderUserSuggestions(_userCache.get(key));
+        return;
+    }
+    fetch(`/api/users/search?q=${encodeURIComponent(q)}&limit=10`, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
+    .then(r => r.json())
+    .then(data => {
+        const results = Array.isArray(data?.results) ? data.results : [];
+        _userCache.set(key, results);
+        _renderUserSuggestions(results);
+    })
+    .catch(() => {/* ignore */});
+}, 250);
+
+function _bindUserAutocomplete() {
+    const inp = document.getElementById('transferToUsername');
+    if (!inp) return;
+    inp.addEventListener('input', (e) => {
+        const q = e.target.value.trim();
+        if (q.length < 2) {
+            _renderUserSuggestions([]);
+            return;
+        }
+        _doUserSearch(q);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', _bindUserAutocomplete);
 
 </script>
 {% endblock %}

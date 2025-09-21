@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}My Orders - The Lotus TCG{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <div class="row justify-content-center">
+    <div class="col-lg-10">
+      <div class="card">
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <h4 class="mb-0"><i class="fas fa-receipt me-2"></i>My Orders</h4>
+          <a href="{{ url_for('catalog') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-shopping-bag me-1"></i>Shop More</a>
+        </div>
+        <div class="card-body">
+          {% if hint %}
+          <div class="alert alert-info">{{ hint }}</div>
+          {% endif %}
+
+          {% if not orders %}
+            <p class="text-muted mb-0">You have no orders yet.</p>
+          {% else %}
+          <div class="table-responsive">
+            <table class="table table-striped align-middle">
+              <thead>
+                <tr>
+                  <th>Order</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Shipment</th>
+                  <th class="text-end">Total (VND)</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for o in orders %}
+                <tr>
+                  <td>
+                    {% if o.is_withdrawal %}
+                      <a href="{{ url_for('withdrawal_confirmation', order_id=o.id) }}">{{ o.order_number or o.id }}</a>
+                    {% else %}
+                      <a href="{{ url_for('order_confirmation', order_id=o.id) }}">{{ o.order_number or o.id }}</a>
+                    {% endif %}
+                  </td>
+                  <td>{{ (o.created_at.strftime('%Y-%m-%d %H:%M') if o.created_at else '-') }}</td>
+                  <td>
+                    <span class="badge {% if o.status=='confirmed' %}bg-success{% elif o.status=='rejected' %}bg-danger{% else %}bg-secondary{% endif %}">
+                      {{ o.status|capitalize }}
+                    </span>
+                  </td>
+                  <td>
+                    {% if o.shipment_method == 'shipping' %}
+                      <i class="fas fa-truck me-1"></i>Shipping
+                    {% elif o.shipment_method == 'pickup' %}
+                      <i class="fas fa-store me-1"></i>Pickup {{ '(' ~ o.pickup_location ~ ')' if o.pickup_location else '' }}
+                    {% else %}
+                      -
+                    {% endif %}
+                  </td>
+                  <td class="text-end">
+                    {% set payable = (o.discounted_total or o.total_amount) %}
+                    {{ '%.0f'|format(payable)|int|tojson|safe }}
+                  </td>
+                  <td class="text-end">
+                    {% if o.is_withdrawal %}
+                      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('withdrawal_confirmation', order_id=o.id) }}">
+                        <i class="fas fa-eye me-1"></i>View
+                      </a>
+                    {% else %}
+                      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('order_confirmation', order_id=o.id) }}">
+                        <i class="fas fa-eye me-1"></i>View
+                      </a>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

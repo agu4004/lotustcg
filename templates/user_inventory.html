@@ -69,6 +69,60 @@
                 </div>
             </div>
 
+            <!-- Store Credit Wallet -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-wallet me-2"></i>Store Credit</h5>
+                    <small class="text-muted">CREDIT items grouped by denomination</small>
+                </div>
+                <div class="card-body">
+                    {% set credit_items = [] %}
+                    {% set _ = credit_items.extend([it for it in inventory_items if it.card_set == 'CREDIT' and it.quantity > 0]) %}
+                    {% if credit_items %}
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Token</th>
+                                    <th class="text-center">Units</th>
+                                    <th class="text-end">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% set total_vnd = 0 %}
+                                {% for it in credit_items %}
+                                    {% set denom = it.card_price|int %}
+                                    {% set token_name = 'Store Credit' %}
+                                    {% if denom == 1000 %}
+                                        {% set token_name = 'Copper Token' %}
+                                    {% elif denom == 10000 %}
+                                        {% set token_name = 'Silver Token' %}
+                                    {% elif denom == 100000 %}
+                                        {% set token_name = 'Gold Token' %}
+                                    {% endif %}
+                                    {% set subtotal = denom * it.quantity %}
+                                    {% set total_vnd = total_vnd + subtotal %}
+                                    <tr>
+                                        <td>{{ token_name }} ({{ "{:,.0f}".format(denom) }} VND)</td>
+                                        <td class="text-center"><span class="badge bg-primary">{{ it.quantity }}</span></td>
+                                        <td class="text-end">{{ "{:,.0f}".format(subtotal) }} VND</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-primary fw-bold">
+                                    <td colspan="2">Total Credits</td>
+                                    <td class="text-end">{{ "{:,.0f}".format(total_vnd) }} VND</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-muted">No credits available.</div>
+                    {% endif %}
+                </div>
+            </div>
+
             <!-- Inventory Table -->
             <div class="card">
                 <div class="card-header">
@@ -110,7 +164,18 @@
                                     </td>
                                     <td class="align-middle">{{ item.card_set }}</td>
                                     <td class="align-middle text-center">
-                                        <span class="badge bg-secondary">{{ item.card_rarity }}</span>
+                                        {% set rarity_l = (item.card_rarity or '') | lower %}
+                                        {% if rarity_l == 'majestic' %}
+                                            <span class="badge bg-danger">{{ item.card_rarity }}</span>
+                                        {% elif rarity_l == 'legendary' %}
+                                            <span class="badge bg-warning text-dark">{{ item.card_rarity }}</span>
+                                        {% elif rarity_l == 'promo' %}
+                                            <span class="badge bg-success">{{ item.card_rarity }}</span>
+                                        {% elif rarity_l == 'marvel' %}
+                                            <span class="badge" style="background-color: purple; color: #fff;">{{ item.card_rarity }}</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ item.card_rarity }}</span>
+                                        {% endif %}
                                     </td>
                                     <td class="align-middle">{{ item.condition }}</td>
                                     <td class="align-middle text-center">

@@ -35,7 +35,17 @@
                                 <tr>
                                     <td><strong>Status:</strong></td>
                                     <td>
-                                        <span class="badge bg-warning">{{ order.status.title() }}</span>
+                                        {% if order.status == 'pending' %}
+                                        <span class="badge bg-warning">Pending</span>
+                                        {% elif order.status == 'confirmed' %}
+                                        <span class="badge bg-success">Confirmed</span>
+                                        {% elif order.status == 'shipped' %}
+                                        <span class="badge bg-info">Shipped</span>
+                                        {% elif order.status == 'rejected' %}
+                                        <span class="badge bg-danger">Rejected</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">{{ order.status.title() }}</span>
+                                        {% endif %}
                                     </td>
                                 </tr>
                                 <tr>

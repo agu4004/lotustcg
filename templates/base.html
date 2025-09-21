@@ -66,13 +66,16 @@
                                 <span class="badge bg-warning ms-1">Admin</span>
                             {% endif %}
                         </a>
-                        <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                            <li><a class="dropdown-item" href="{{ url_for('user_inventory') }}">
-                                <i class="fas fa-box me-2"></i>My Inventory
-                            </a></li>
-                            <li><a class="dropdown-item" href="{{ url_for('account_settings') }}">
-                                <i class="fas fa-user-cog me-2"></i>Account Settings
-                            </a></li>
+                         <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                             <li><a class="dropdown-item" href="{{ url_for('user_inventory') }}">
+                                 <i class="fas fa-box me-2"></i>My Inventory
+                             </a></li>
+                             <li><a class="dropdown-item" href="{{ url_for('my_orders') }}">
+                                 <i class="fas fa-receipt me-2"></i>My Orders
+                             </a></li>
+                             <li><a class="dropdown-item" href="{{ url_for('account_settings') }}">
+                                 <i class="fas fa-user-cog me-2"></i>Account Settings
+                             </a></li>
                             {% if current_user.is_admin() %}
                             <li><a class="dropdown-item" href="{{ url_for('admin') }}">
                                 <i class="fas fa-cog me-2"></i>Admin Panel
@@ -84,6 +87,11 @@
                         </ul>
                     </li>
                     {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('register') }}">
+                            <i class="fas fa-user-plus me-1"></i>Register
+                        </a>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('login') }}">
                             <i class="fas fa-sign-in-alt me-1"></i>Login
