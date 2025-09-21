@@ -34,8 +34,8 @@
                 <div class="col-md-3">
                     <div class="card text-center">
                         <div class="card-body">
-                            <h3 class="text-success">{{ orders|selectattr('status', 'equalto', 'fulfilled')|list|length }}</h3>
-                            <p class="text-muted mb-0">Fulfilled Orders</p>
+                            <h3 class="text-success">{{ orders|selectattr('status', 'equalto', 'confirmed')|list|length }}</h3>
+                            <p class="text-muted mb-0">Confirmed Orders</p>
                         </div>
                     </div>
                 </div>
@@ -115,8 +115,10 @@
                                     <td>
                                         {% if order.status == 'pending' %}
                                         <span class="badge bg-warning">Pending</span>
-                                        {% elif order.status == 'fulfilled' %}
-                                        <span class="badge bg-success">Fulfilled</span>
+                                        {% elif order.status == 'confirmed' %}
+                                        <span class="badge bg-success">Confirmed</span>
+                                        {% elif order.status == 'shipped' %}
+                                        <span class="badge bg-info">Shipped</span>
                                         {% elif order.status == 'rejected' %}
                                         <span class="badge bg-danger">Rejected</span>
                                         {% else %}
@@ -130,18 +132,23 @@
                                                 <i class="fas fa-eye"></i>
                                             </a>
                                             {% if order.status == 'pending' %}
-                                            <form method="POST" action="{{ url_for('admin_fulfill_order', order_id=order.id) }}"
-                                                  class="d-inline">
-                                                <button type="submit" class="btn btn-outline-success btn-sm"
-                                                        title="Fulfill Order" onclick="return confirm('Mark this order as fulfilled?')">
-                                                    <i class="fas fa-check"></i>
+                                            <form method="POST" action="{{ url_for('admin_fulfill_order', order_id=order.id) }}" class="d-inline">
+                                                <button type="submit" class="btn btn-outline-success btn-sm" title="Confirm Order" onclick="return confirm('Mark this order as confirmed?')"><i class="fas fa-check"></i></button>
+                                            </form>
+                                            <form method="POST" action="{{ url_for('admin_ship_order', order_id=order.id) }}" class="d-inline">
+                                                <button type="submit" class="btn btn-outline-primary btn-sm" title="Mark as Shipped" onclick="return confirm('Mark this order as shipped?')">
+                                                    <i class="fas fa-truck"></i>
                                                 </button>
                                             </form>
-                                            <form method="POST" action="{{ url_for('admin_reject_order', order_id=order.id) }}"
-                                                  class="d-inline">
-                                                <button type="submit" class="btn btn-outline-danger btn-sm"
-                                                        title="Reject Order" onclick="return confirm('Reject this order and restore stock?')">
+                                            <form method="POST" action="{{ url_for('admin_reject_order', order_id=order.id) }}" class="d-inline">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm" title="Reject Order" onclick="return confirm('Reject this order and restore stock?')">
                                                     <i class="fas fa-times"></i>
+                                                </button>
+                                            </form>
+                                            {% elif order.status == 'confirmed' %}
+                                            <form method="POST" action="{{ url_for('admin_ship_order', order_id=order.id) }}" class="d-inline">
+                                                <button type="submit" class="btn btn-outline-primary btn-sm" title="Mark as Shipped" onclick="return confirm('Mark this order as shipped?')">
+                                                    <i class="fas fa-truck"></i>
                                                 </button>
                                             </form>
                                             {% endif %}
@@ -157,6 +164,92 @@
                         <i class="fas fa-clipboard-list display-1 text-muted mb-3"></i>
                         <h5>No Orders Found</h5>
                         <p class="text-muted">Orders will appear here once customers start placing them.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Withdrawal Requests -->
+            <div class="card mt-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-dolly me-2"></i>Withdrawal Requests</h5>
+                    <small class="text-muted">Recent inventory withdrawals</small>
+                </div>
+                <div class="card-body">
+                    {% if withdrawals and withdrawals|length > 0 %}
+                    <div class="table-responsive">
+                        <table class="table table-striped align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Request ID</th>
+                                    <th>User</th>
+                                    <th>Method</th>
+                                    <th>Destination</th>
+                                    <th>Items</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for w in withdrawals %}
+                                <tr>
+                                    <td>
+                                        {% if w.created_at %}
+                                        <div>{{ w.created_at.strftime('%b %d, %Y') }}</div>
+                                        <small class="text-muted">{{ w.created_at.strftime('%I:%M %p') }}</small>
+                                        {% else %}
+                                        <span class="text-muted">N/A</span>
+                                        {% endif %}
+                                    </td>
+                                    <td><code>{{ (w.order.id if w.order else w.request_id) or 'N/A' }}</code></td>
+                                    <td>{{ (w.user.username if w.user else 'N/A') }}</td>
+                                    <td>
+                                        {% if w.method == 'shipping' %}
+                                        <span class="badge bg-primary">Shipping</span>
+                                        {% elif w.method == 'pickup' %}
+                                        <span class="badge bg-success">Pickup</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">{{ w.method or 'Unknown' }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">{{ w.dest or '' }}</small>
+                                    </td>
+                                    <td>
+                                        <small>{{ w.items or '' }}</small>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="btn-group" role="group">
+                                            {% if w.order %}
+                                            <a href="{{ url_for('withdrawal_confirmation', order_id=w.order.id) }}" class="btn btn-outline-info btn-sm" title="View">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            {% else %}
+                                            <button class="btn btn-outline-secondary btn-sm" disabled title="No order linked">
+                                                <i class="fas fa-eye"></i>
+                                            </button>
+                                            {% endif %}
+                                            <form method="POST" action="{{ url_for('admin_withdraw_approve', request_id=w.request_id) }}" class="d-inline">
+                                                <button type="submit" class="btn btn-outline-success btn-sm" title="Approve" onclick="return confirm('Approve this withdrawal?')">
+                                                    <i class="fas fa-check"></i>
+                                                </button>
+                                            </form>
+                                            <form method="POST" action="{{ url_for('admin_withdraw_reject', request_id=w.request_id) }}" class="d-inline">
+                                                <button type="submit" class="btn btn-outline-danger btn-sm" title="Reject" onclick="return confirm('Reject this withdrawal?')">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-dolly text-muted fa-2x mb-2"></i>
+                        <div class="text-muted">No withdrawal requests yet.</div>
                     </div>
                     {% endif %}
                 </div>

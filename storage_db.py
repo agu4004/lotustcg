@@ -402,6 +402,13 @@ class DatabaseStorage:
                         results['errors'].append(f'Row {row_num}: invalid market_price "{row.get("market_price", "")}"')
                         continue
 
+                    # Disallow adding CREDIT tokens into personal inventory
+                    token_names = {'copper token', 'silver token', 'gold token'}
+                    set_name_val = (row.get('set_name') or '').strip()
+                    if name.lower() in token_names or set_name_val.upper() == 'CREDIT':
+                        results['errors'].append(f'Row {row_num}: credit tokens cannot be imported into personal inventory')
+                        continue
+
                     # Check if card exists, if not create it
                     card = Card.query.filter_by(name=name).first()
                     if not card:
@@ -421,6 +428,10 @@ class DatabaseStorage:
                         db.session.commit()
                         logger.debug(f"Created new card: {name} with market price: {market_price}")
                     else:
+                        # Block if existing card is a CREDIT token
+                        if str(card.set_name).upper() == 'CREDIT':
+                            results['errors'].append(f'Row {row_num}: credit tokens cannot be imported into personal inventory')
+                            continue
                         # Update existing card's price to match market price
                         if float(card.price) != market_price:
                             old_price = card.price

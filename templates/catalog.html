@@ -195,29 +195,36 @@
                         <div class="card-header d-flex justify-content-between align-items-center">
                             <strong class="text-truncate me-2">{{ card.name }}</strong>
                             <div class="d-flex gap-1">
-                                <span class="badge bg-secondary">{{ card.rarity }}</span>
+                                {% set rarity_l = (card.rarity or '') | lower %}
+                                {% if rarity_l == 'majestic' %}
+                                    <span class="badge bg-danger">{{ card.rarity }}</span>
+                                {% elif rarity_l == 'legendary' %}
+                                    <span class="badge bg-warning text-dark">{{ card.rarity }}</span>
+                                {% elif rarity_l == 'promo' %}
+                                    <span class="badge bg-success">{{ card.rarity }}</span>
+                                {% elif rarity_l == 'marvel' %}
+                                    <span class="badge" style="background-color: purple; color: #fff;">{{ card.rarity }}</span>
+                                {% else %}
+                                {% set rarity_l = (card.rarity or '') | lower %}
+                                {% if rarity_l == 'majestic' %}
+                                    <span class="badge bg-danger">{{ card.rarity }}</span>
+                                {% elif rarity_l == 'legendary' %}
+                                    <span class="badge bg-warning text-dark">{{ card.rarity }}</span>
+                                {% elif rarity_l == 'promo' %}
+                                    <span class="badge bg-success">{{ card.rarity }}</span>
+                                {% elif rarity_l == 'marvel' %}
+                                    <span class="badge" style="background-color: purple; color: #fff;">{{ card.rarity }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ card.rarity }}</span>
+                                {% endif %}
+                                {% endif %}
                                 {% if card.quantity == 0 %}
                                 <span class="badge bg-warning text-dark">Out of Stock</span>
                                 {% endif %}
                             </div>
                         </div>
 
-                        <!-- Seller Information -->
-                        {% if card.get('seller_info') %}
-                        <div class="card-body py-2 border-bottom">
-                            <div class="seller-info text-center">
-                                {% if card.seller_info.type == 'admin' %}
-                                    <span class="badge bg-primary">
-                                        <i class="fas fa-store me-1"></i>{{ card.seller_info.name }}
-                                    </span>
-                                {% elif card.seller_info.type == 'user' %}
-                                    <span class="badge bg-success">
-                                        <i class="fas fa-user me-1"></i>Sold by {{ card.seller_info.name }}
-                                    </span>
-                                {% endif %}
-                            </div>
-                        </div>
-                        {% endif %}
+                        {# Seller Information removed per request #}
 
                         <div class="card-body">
                             <div class="text-center mb-3">
@@ -486,4 +493,3 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endblock %}
-

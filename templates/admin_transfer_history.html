@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Transfer History - The Lotus TCG{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h3><i class="fas fa-history me-2"></i>All Transfers</h3>
+    <form class="d-flex" method="get" action="">
+      <input class="form-control me-2" type="search" placeholder="Search username, user ID, or card name" name="q" value="{{ search or '' }}" />
+      <button class="btn btn-outline-primary" type="submit"><i class="fas fa-search"></i></button>
+    </form>
+  </div>
+
+  {% if transfers %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Sender</th>
+          <th>Recipient</th>
+          <th>Item</th>
+          <th class="text-center">Qty</th>
+          <th>Type</th>
+          <th>Idempotency</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in transfers %}
+        <tr>
+          <td>{{ t.created_at[:19].replace('T', ' ') if t.created_at else '' }}</td>
+          <td>@{{ t.from_username }} (#{{ t.from_user_id }})</td>
+          <td>@{{ t.to_username }} (#{{ t.to_user_id }})</td>
+          <td>{{ t.card_name }}{% if t.card_set %} <small class="text-muted">({{ t.card_set }})</small>{% endif %}</td>
+          <td class="text-center"><span class="badge bg-primary">{{ t.quantity }}</span></td>
+          <td>{% if t.is_credit %}<span class="badge bg-info">CREDIT</span>{% else %}<span class="badge bg-secondary">Card</span>{% endif %}</td>
+          <td><small class="text-muted">{{ t.idempotency_key or '' }}</small></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+    <div class="text-center py-5">
+      <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+      <p class="text-muted">No transfer activity found.</p>
+    </div>
+  {% endif %}
+
+  {% if pagination and (pagination.pages or 0) > 1 %}
+  <nav class="mt-3">
+    <ul class="pagination">
+      <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+        <a class="page-link" href="?page={{ pagination.prev_num }}{% if search %}&q={{ search }}{% endif %}">Previous</a>
+      </li>
+      <li class="page-item disabled"><span class="page-link">Page {{ pagination.page }} of {{ pagination.pages }}</span></li>
+      <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+        <a class="page-link" href="?page={{ pagination.next_num }}{% if search %}&q={{ search }}{% endif %}">Next</a>
+      </li>
+    </ul>
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}
+

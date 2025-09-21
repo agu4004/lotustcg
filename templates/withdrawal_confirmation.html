@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Withdrawal Details - The Lotus TCG{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+  <div class="row justify-content-center">
+    <div class="col-lg-10">
+      <div class="card">
+        <div class="card-header d-flex align-items-center justify-content-between">
+          <h4 class="mb-0"><i class="fas fa-dolly me-2"></i>Withdrawal Details</h4>
+          <a href="{{ url_for('my_orders') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-list me-1"></i>My Orders</a>
+        </div>
+        <div class="card-body">
+          <div class="row mb-3">
+            <div class="col-md-6">
+              <p class="mb-1"><strong>Withdrawal ID:</strong> {{ order.order_number or order.id }}</p>
+              <p class="mb-1"><strong>Date:</strong> {{ order.created_at.strftime('%Y-%m-%d %H:%M') if order.created_at else '-' }}</p>
+              <p class="mb-1">
+                <strong>Status:</strong>
+                <span class="badge {% if order.status=='confirmed' %}bg-success{% elif order.status=='rejected' %}bg-danger{% else %}bg-warning text-dark{% endif %}">
+                  {{ order.status|capitalize }}
+                </span>
+              </p>
+            </div>
+            <div class="col-md-6">
+              <p class="mb-1">
+                <strong>Method:</strong>
+                {% if order.shipment_method == 'shipping' %}
+                  <i class="fas fa-truck me-1"></i>Shipping
+                {% else %}
+                  <i class="fas fa-store me-1"></i>Pickup {{ '(' ~ order.pickup_location ~ ')' if order.pickup_location else '' }}
+                {% endif %}
+              </p>
+              {% if order.shipment_method == 'shipping' %}
+              <div class="text-muted small">
+                <div>{{ order.shipping_address }}</div>
+                <div>{{ order.shipping_city }}, {{ order.shipping_province }} {{ order.shipping_postal_code }}</div>
+                <div>{{ order.shipping_country }}</div>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+
+          <hr />
+
+          <h5 class="mb-3">Items</h5>
+          {% if order_items %}
+          <div class="table-responsive">
+            <table class="table table-striped align-middle">
+              <thead>
+                <tr>
+                  <th>Card</th>
+                  <th class="text-center">Qty</th>
+                  <th class="text-end">Unit Price (VND)</th>
+                  <th class="text-end">Total (VND)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for it in order_items %}
+                <tr>
+                  <td>{{ it.card.name if it.card else 'Unknown' }}</td>
+                  <td class="text-center">{{ it.quantity }}</td>
+                  <td class="text-end">{{ '%.0f'|format(it.unit_price) }}</td>
+                  <td class="text-end">{{ '%.0f'|format(it.total_price) }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <p class="text-muted">No items recorded.</p>
+          {% endif %}
+
+          <div class="d-flex justify-content-end mt-3">
+            <div>
+              <div class="fw-bold">Total: {{ '%.0f'|format(order.total_amount) }} VND</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+{% endblock %}

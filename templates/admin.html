@@ -64,6 +64,43 @@
                 </div>
             </div>
             
+            <!-- Issue Store Credits -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-coins me-2"></i>Issue Store Credits</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label">User ID</label>
+                            <input type="number" class="form-control" id="credit-user-id" placeholder="e.g. 2">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Denomination</label>
+                            <select id="credit-denom" class="form-select">
+                                <option value="1000">Copper Token (1,000 VND)</option>
+                                <option value="10000">Silver Token (10,000 VND)</option>
+                                <option value="100000">Gold Token (100,000 VND)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Units</label>
+                            <input type="number" class="form-control" id="credit-units" value="1" min="1">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Idempotency</label>
+                            <input type="text" class="form-control" id="credit-idem" placeholder="auto">
+                        </div>
+                        <div class="col-md-2 text-end">
+                            <button class="btn btn-primary" id="issue-credit-btn">
+                                <i class="fas fa-paper-plane me-1"></i>Issue
+                            </button>
+                        </div>
+                    </div>
+                    <div id="issue-credit-msg" class="mt-3" style="display:none;"></div>
+                </div>
+            </div>
+            
             <!-- CSV Format Help -->
             <div class="card mb-4">
                 <div class="card-header">
@@ -386,7 +423,18 @@
                                             </td>
                                             <td>
                                                 <div id="rarity-display-{{ card.id }}">
-                                                    <span class="badge bg-secondary" style="font-size: 10px;">{{ card.rarity }}</span>
+                                                    {% set rarity_l = (card.rarity or '') | lower %}
+                                                    {% if rarity_l == 'majestic' %}
+                                                        <span class="badge bg-danger" style="font-size: 10px;">{{ card.rarity }}</span>
+                                                    {% elif rarity_l == 'legendary' %}
+                                                        <span class="badge bg-warning text-dark" style="font-size: 10px;">{{ card.rarity }}</span>
+                                                    {% elif rarity_l == 'promo' %}
+                                                        <span class="badge bg-success" style="font-size: 10px;">{{ card.rarity }}</span>
+                                                    {% elif rarity_l == 'marvel' %}
+                                                        <span class="badge" style="background-color: purple; color: #fff; font-size: 10px;">{{ card.rarity }}</span>
+                                                    {% else %}
+                                                        <span class="badge bg-secondary" style="font-size: 10px;">{{ card.rarity }}</span>
+                                                    {% endif %}
                                                 </div>
                                             </td>
                                             <td>
@@ -570,29 +618,35 @@
                     <h5 class="mb-0"><i class="fas fa-bolt me-2"></i>Quick Actions</h5>
                 </div>
                 <div class="card-body d-grid gap-2">
-                    <a href="{{ url_for('catalog') }}" class="btn btn-outline-primary">
+                    <a href="{{ url_for('catalog') }}" class="btn btn-outline-primary w-100">
                         <i class="fas fa-eye me-2"></i>View Catalog
                     </a>
-                    <a href="{{ url_for('view_cart') }}" class="btn btn-outline-success">
+                    <a href="{{ url_for('view_cart') }}" class="btn btn-outline-success w-100">
                         <i class="fas fa-shopping-cart me-2"></i>View Cart
                         {% if cart_count > 0 %}
                             <span class="badge bg-success ms-1">{{ cart_count }}</span>
                         {% endif %}
                     </a>
-                    <a href="{{ url_for('download_sample_csv') }}" class="btn btn-outline-info">
+                    <a href="{{ url_for('download_sample_csv') }}" class="btn btn-outline-info w-100">
                         <i class="fas fa-file-alt me-2"></i>Sample CSV
                     </a>
-                    <a href="{{ url_for('download_inventory_csv') }}" class="btn btn-outline-secondary">
+                    <a href="{{ url_for('download_inventory_csv') }}" class="btn btn-outline-secondary w-100">
                         <i class="fas fa-boxes me-2"></i>Export Inventory
                         {% if cards %}
                             <span class="badge bg-secondary ms-1">{{ cards|length }}</span>
                         {% endif %}
                     </a>
-                    <a href="{{ url_for('admin_orders') }}" class="btn btn-outline-primary">
+                    <a href="{{ url_for('admin_orders') }}" class="btn btn-outline-primary w-100">
                         <i class="fas fa-clipboard-list me-2"></i>Manage Orders
                     </a>
-                    <a href="{{ url_for('admin_coupons') }}" class="btn btn-outline-success">
+                    <a href="{{ url_for('admin_consignments') }}" class="btn btn-outline-secondary w-100">
+                        <i class="fas fa-warehouse me-2"></i>Show cards sent to shop
+                    </a>
+                    <a href="{{ url_for('admin_coupons') }}" class="btn btn-outline-success w-100">
                         <i class="fas fa-tags me-2"></i>Manage Coupons
+                    </a>
+                    <a href="{{ url_for('admin_transfer_history') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-history me-1"></i>View All Transfers
                     </a>
                 </div>
             </div>
@@ -631,6 +685,39 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    // Issue credit
+    const btnIssue = document.getElementById('issue-credit-btn');
+    if (btnIssue) {
+        const userId = document.getElementById('credit-user-id');
+        const denom = document.getElementById('credit-denom');
+        const units = document.getElementById('credit-units');
+        const idem = document.getElementById('credit-idem');
+        const msg = document.getElementById('issue-credit-msg');
+        const showMsg = (html) => { msg.innerHTML = html; msg.style.display = 'block'; };
+        btnIssue.addEventListener('click', function() {
+            const payload = {
+                user_id: parseInt(userId.value, 10),
+                denomination_vnd: parseInt(denom.value, 10),
+                units: parseInt(units.value || '1', 10)
+            };
+            if (!payload.user_id || payload.user_id <= 0) { showMsg('<div class="alert alert-warning">Enter a valid user id.</div>'); return; }
+            const idemKey = (idem.value && idem.value.trim()) || ('issue-' + Math.random().toString(36).slice(2));
+            btnIssue.disabled = true; btnIssue.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Issuing...';
+            fetch('/admin/credit/issue', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idemKey },
+                body: JSON.stringify(payload)
+            }).then(r => r.json()).then(data => {
+                if (data.success) {
+                    showMsg(`<div class=\"alert alert-success\">Issued ${data.units_issued} × ${Number(data.denomination_vnd).toLocaleString()} VND to user #${data.user_id}.</div>`);
+                } else {
+                    showMsg(`<div class=\"alert alert-danger\">${data.error || 'Failed to issue.'}</div>`);
+                }
+            }).catch(err => {
+                console.error(err); showMsg('<div class=\"alert alert-danger\">Unexpected error.</div>');
+            }).finally(() => { btnIssue.disabled = false; btnIssue.innerHTML = '<i class=\"fas fa-paper-plane me-1\"></i>Issue'; });
+        });
+    }
     // File upload validation
     const fileInput = document.getElementById('csv_file');
     if (fileInput) {
@@ -709,5 +796,25 @@ function toggleEdit(cardId) {
         }
     });
 }
+
+// Cross-tab quantity sync: listen for inventory/admin updates
+window.addEventListener('storage', function(e) {
+  if (e.key !== 'qty_update' || !e.newValue) return;
+  try {
+    const msg = JSON.parse(e.newValue);
+    if (!msg || !msg.card_id) return;
+    const disp = document.getElementById(`quantity-display-${msg.card_id}`);
+    if (!disp) return;
+    // Extract current number from display element
+    const txt = disp.textContent || '';
+    const m = txt.match(/\d+/);
+    const current = m ? parseInt(m[0]) : 0;
+    const next = current + (parseInt(msg.admin_delta || 0));
+    // Update display content (simple numeric)
+    disp.innerHTML = next > 0 ? `<span class="text-success fw-bold">${next}</span>` : `<span class="text-muted">0</span>`;
+  } catch (err) {
+    // ignore
+  }
+});
 </script>
 {% endblock %}

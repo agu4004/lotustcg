@@ -185,9 +185,18 @@
                                             </td>
                                             <td>
                                                 {% if item.card_rarity %}
-                                                <span class="badge bg-secondary" style="font-size: 10px;">
-                                                    {{ item.card_rarity }}
-                                                </span>
+                                                {% set rarity_l = (item.card_rarity or '') | lower %}
+                                                {% if rarity_l == 'majestic' %}
+                                                    <span class="badge bg-danger" style="font-size: 10px;">{{ item.card_rarity }}</span>
+                                                {% elif rarity_l == 'legendary' %}
+                                                    <span class="badge bg-warning text-dark" style="font-size: 10px;">{{ item.card_rarity }}</span>
+                                                {% elif rarity_l == 'promo' %}
+                                                    <span class="badge bg-success" style="font-size: 10px;">{{ item.card_rarity }}</span>
+                                                {% elif rarity_l == 'marvel' %}
+                                                    <span class="badge" style="background-color: purple; color: #fff; font-size: 10px;">{{ item.card_rarity }}</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary" style="font-size: 10px;">{{ item.card_rarity }}</span>
+                                                {% endif %}
                                                 {% else %}
                                                 <span class="text-muted">Unknown</span>
                                                 {% endif %}
@@ -326,7 +335,7 @@
                                             <td>{{ order.id }}</td>
                                             <td>{{ order.created_at.strftime('%Y-%m-%d') if order.created_at else 'N/A' }}</td>
                                             <td>
-                                                <span class="badge bg-{{ 'success' if order.status == 'fulfilled' else 'warning' if order.status == 'pending' else 'danger' }}">
+                                                <span class="badge bg-{{ 'success' if order.status == 'confirmed' else 'warning' if order.status == 'pending' else 'danger' }}">
                                                     {{ order.status.title() }}
                                                 </span>
                                             </td>
