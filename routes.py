@@ -1462,11 +1462,15 @@ def register():
             from werkzeug.security import generate_password_hash
             hashed_password = generate_password_hash(password)
 
+            # Derive full name from first and last name provided
+            derived_full_name = ' '.join([n for n in (first_name, last_name) if n]).strip() or None
+
             new_user = User(
                 username=username,
                 email=email,
                 password_hash=hashed_password,
-                role='user'
+                role='user',
+                full_name=derived_full_name
             )
 
             db.session.add(new_user)

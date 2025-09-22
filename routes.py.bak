@@ -7,14 +7,26 @@ from models import (
     User, Card, Order, OrderItem,
     UserInventory, InventoryItem, TradeOffer, TradeItem,
     CartSession, CartItem, UserAuditLog, VerificationAuditLog,
-    Coupon
+    Coupon, ShopInventoryItem, ShopConsignmentLog,
+    InventoryTransferLog,
 )
 from auth import admin_required, get_redirect_target
 from decimal import Decimal
 import logging
 import re
 from functools import wraps
+from sqlalchemy.orm import load_only
+from sqlalchemy import String
 from datetime import datetime
+import uuid
+
+from credit_service import (
+    issue_credits as svc_issue_credits,
+    transfer_item as svc_transfer_item,
+    apply_credits as svc_apply_credits,
+    ServiceError,
+)
+from metrics import COUNTERS
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +152,192 @@ def rate_limit_inventory_operations(f):
         return f(*args, **kwargs)
     return decorated_function
 
+
+# ---------------------------
+# CREDIT API ENDPOINTS (JSON)
+# ---------------------------
+
+def _json_error(code: str, message: str, http: int = 400, **extra):
+    payload = {'success': False, 'error': code, 'message': message}
+    if extra:
+        payload.update(extra)
+    return jsonify(payload), http
+
+
+def _get_idem_key():
+    return request.headers.get('Idempotency-Key') or request.json.get('idempotency_key') if request.is_json else None
+
+
+def _log_event(event: str, **fields):
+    req_id = request.headers.get('X-Request-Id') or str(uuid.uuid4())
+    fields = {'event': event, 'request_id': req_id, **fields}
+    logger.info(fields)
+
+
+@app.route('/admin/credit/issue', methods=['POST'])
+@login_required
+def admin_credit_issue():
+    if not current_user.is_admin():
+        return _json_error('FORBIDDEN', 'Admin privileges required', 403)
+    if not request.is_json:
+        return _json_error('INVALID_JSON', 'Request must be JSON', 400)
+    data = request.get_json(silent=True) or {}
+    idem = _get_idem_key()
+    try:
+        user_id = int(data.get('user_id'))
+        denom = int(data.get('denomination_vnd') or data.get('amount_vnd'))
+        units = int(data.get('units', 1))
+    except Exception:
+        return _json_error('INVALID_REQUEST', 'Invalid or missing fields')
+
+    try:
+        res = svc_issue_credits(current_user, user_id, denom, units=units, idempotency_key=idem, notes=data.get('notes'))
+        COUNTERS.inc('credits.issued.count', amount=1)
+        COUNTERS.inc('credits.issued.sum', amount=int(res['total_vnd']))
+        _log_event('credit_issue', idempotency_key=idem, user_id=user_id, denom=denom, units=units)
+        return jsonify({'success': True, **res})
+    except ServiceError as se:
+        if se.code == 'IDEMPOTENT_REPLAY':
+            COUNTERS.inc('idempotent.replay')
+        return _json_error(se.code, str(se), se.http, **se.extra)
+    except Exception as e:
+        logger.exception({'event': 'credit_issue_error', 'error': str(e)})
+        return _json_error('INTERNAL_ERROR', 'Unexpected error', 500)
+
+
+@app.route('/inventory/transfer', methods=['POST'])
+@login_required
+def inventory_transfer():
+    if not request.is_json:
+        return _json_error('INVALID_JSON', 'Request must be JSON', 400)
+    data = request.get_json(silent=True) or {}
+    idem = _get_idem_key()
+    try:
+        from_user_id = int(data.get('from_user_id'))
+        # Allow either to_user_id (int) or to_username (string)
+        to_user_id_raw = data.get('to_user_id')
+        to_username = data.get('to_username')
+        item_id = int(data.get('inventory_item_id'))
+        quantity = int(data.get('quantity', 1))
+    except Exception:
+        return _json_error('INVALID_REQUEST', 'Invalid or missing fields')
+
+    # Resolve recipient if username provided
+    if (to_user_id_raw is None or to_user_id_raw == '') and to_username:
+        user_rec = User.query.filter_by(username=to_username).first()
+        if not user_rec:
+            return _json_error('USER_NOT_FOUND', 'Recipient user not found', 404)
+        to_user_id = user_rec.id
+    else:
+        try:
+            to_user_id = int(to_user_id_raw)
+        except Exception:
+            return _json_error('INVALID_REQUEST', 'Invalid recipient user', 400)
+        # Early existence check for recipient when id is provided
+        rec = User.query.get(to_user_id)
+        if not rec:
+            return _json_error('USER_NOT_FOUND', 'Recipient user not found', 404)
+
+    if current_user.id != from_user_id and not current_user.is_admin():
+        return _json_error('FORBIDDEN', 'Cannot transfer items you do not own', 403)
+
+    try:
+        res = svc_transfer_item(from_user_id, to_user_id, item_id, quantity, idempotency_key=idem)
+        if res.get('is_credit'):
+            COUNTERS.inc('credits.transferred.count')
+            COUNTERS.inc('credits.transferred.units', amount=quantity)
+        _log_event('inventory_transfer', idempotency_key=idem, **res)
+        return jsonify({'success': True, **res})
+    except ServiceError as se:
+        return _json_error(se.code, str(se), se.http, **se.extra)
+    except Exception as e:
+        logger.exception({'event': 'inventory_transfer_error', 'error': str(e)})
+        return _json_error('INTERNAL_ERROR', 'Unexpected error', 500)
+
+
+@app.route('/checkout/apply-credits', methods=['POST'])
+@login_required
+def checkout_apply_credits():
+    if not request.is_json:
+        return _json_error('INVALID_JSON', 'Request must be JSON', 400)
+    data = request.get_json(silent=True) or {}
+    idem = _get_idem_key()
+
+    try:
+        user_id = int(data.get('user_id') or current_user.id)
+        amount_due_vnd = int(data.get('amount_due_vnd'))
+        mode = data.get('mode', 'auto')
+        breakdown = data.get('breakdown')
+        coupon_pct = data.get('coupon_percentage')
+    except Exception:
+        return _json_error('INVALID_REQUEST', 'Invalid or missing fields')
+
+    if user_id != current_user.id and not current_user.is_admin():
+        return _json_error('FORBIDDEN', 'Cannot redeem credits for another user', 403)
+
+    # Apply percentage coupon first if provided
+    if coupon_pct is not None:
+        try:
+            pct = float(coupon_pct)
+            if pct < 0 or pct > 100:
+                return _json_error('INVALID_COUPON', 'Coupon percentage must be 0-100')
+            discounted = int(amount_due_vnd - (amount_due_vnd * (pct / 100.0)))
+            if discounted < 0:
+                discounted = 0
+            amount_after_pct = discounted
+        except Exception:
+            return _json_error('INVALID_COUPON', 'Invalid coupon percentage value')
+    else:
+        amount_after_pct = amount_due_vnd
+
+    # Support manual breakdown by denomination (client doesn't know card IDs)
+    breakdown_by_denom = data.get('breakdown_by_denom') or {}
+    if mode == 'manual' and breakdown_by_denom and not breakdown:
+        # Convert to card-id based breakdown using canonical CREDIT cards
+        b = []
+        for denom_str, units in breakdown_by_denom.items():
+            try:
+                denom = int(denom_str)
+                units = int(units)
+            except Exception:
+                continue
+            # Lookup card id
+            from credit_service import get_or_create_credit_card
+            card = get_or_create_credit_card(denom)
+            b.append({'card_id': card.id, 'units': units})
+        breakdown = b
+
+    try:
+        # Preview only; no deduction here
+        res = svc_apply_credits(user_id, amount_after_pct, mode=mode, breakdown=breakdown, idempotency_key=None, related_order_id=None, preview=True)
+        COUNTERS.inc('credits.redeemed.count')
+        COUNTERS.inc('credits.redeemed.sum', amount=int(res['credits_applied_vnd']))
+        _log_event('credit_redeem', idempotency_key=idem, user_id=user_id, amount_due_vnd=amount_due_vnd, amount_after_pct=amount_after_pct)
+        # Persist plan in session so checkout POST can redeem later
+        try:
+            session['credit_amount_after_pct'] = int(amount_after_pct)
+            session['credit_applied_vnd'] = int(res.get('credits_applied_vnd') or 0)
+            session['credit_remaining_vnd'] = int(res.get('remaining_vnd') or (amount_after_pct - (res.get('credits_applied_vnd') or 0)))
+            session['credit_breakdown'] = res.get('applied_breakdown') or []
+            session['credit_mode'] = mode
+        except Exception:
+            # Do not fail the request if session cannot be updated
+            pass
+        return jsonify({'success': True, **res, 'amount_due_vnd': amount_due_vnd, 'amount_after_pct': amount_after_pct})
+    except ServiceError as se:
+        COUNTERS.inc('credits.errors')
+        return _json_error(se.code, str(se), se.http, **se.extra)
+    except Exception as e:
+        logger.exception({'event': 'credit_redeem_error', 'error': str(e)})
+        COUNTERS.inc('credits.errors')
+        return _json_error('INTERNAL_ERROR', 'Unexpected error', 500)
+
+
+@app.route('/metrics', methods=['GET'])
+def metrics():
+    body = COUNTERS.render_prom()
+    return app.response_class(response=body, status=200, mimetype='text/plain; version=0.0.4')
+
 @app.route('/')
 def index():
     """Home page with featured cards"""
@@ -205,7 +403,7 @@ def catalog():
         user_items_query = InventoryItem.query.join(Card).filter(
             InventoryItem.is_verified == True,
             InventoryItem.quantity > 0,
-            InventoryItem.is_public == True
+            InventoryItem.listed_for_sale == True
         )
 
         if query:
@@ -360,8 +558,27 @@ def card_detail(card_id):
     if not card:
         flash('Card not found', 'error')
         return redirect(url_for('catalog'))
-    
-    return render_template('card_detail.html', card=card)
+    # Related cards from same set (admin catalog)
+    try:
+        set_name = card.get('set_name') if isinstance(card, dict) else getattr(card, 'set_name', None)
+        related_cards = []
+        if set_name:
+            candidates = storage.search_cards(
+                query='',
+                set_filter=set_name,
+                rarity_filter='',
+                foiling_filter='',
+                min_price=None,
+                max_price=None
+            ) or []
+            related_cards = [c for c in candidates if str(c.get('id')) != str(card_id)]
+            in_stock = [c for c in related_cards if c.get('quantity', 0) > 0]
+            out_stock = [c for c in related_cards if c.get('quantity', 0) == 0]
+            related_cards = (in_stock + out_stock)[:9]
+    except Exception:
+        related_cards = []
+
+    return render_template('card_detail.html', card=card, related_cards=related_cards)
 
 # REMOVED: Obsolete function replaced by cart_add_json
 # The old add_to_cart route has been removed to prevent conflicts with the new database-based cart system
@@ -464,11 +681,16 @@ def checkout():
         logger.info("=== ORDER PROCESSING DEBUG ===")
         try:
             # Validate required fields
+            customer_email = request.form.get('customer_email', '').strip()
             customer_name = request.form.get('customer_name', '').strip()
             contact_number = request.form.get('contact_number', '').strip()
             shipment_method = request.form.get('shipment_method', '')
 
             logger.info(f"Order details: customer_name='{customer_name}', contact_number='{contact_number}', shipment_method='{shipment_method}'")
+
+            if not customer_email:
+                flash('Email is required', 'error')
+                return redirect(url_for('checkout'))
 
             if not customer_name:
                 flash('Customer name is required', 'error')
@@ -478,7 +700,7 @@ def checkout():
                 flash('Contact number is required', 'error')
                 return redirect(url_for('checkout'))
 
-            if shipment_method not in ['shipping', 'pickup']:
+            if shipment_method not in ['shipping', 'pickup', 'inventory']:
                 flash('Please select a valid shipment method', 'error')
                 return redirect(url_for('checkout'))
 
@@ -508,6 +730,9 @@ def checkout():
                 if pickup_location not in ['Iron Hammer', 'Floating Dojo']:
                     flash('Please select a valid pickup location', 'error')
                     return redirect(url_for('checkout'))
+            elif shipment_method == 'inventory':
+                # No extra fields required; inventory addition on admin approval
+                pass
 
             # Calculate order total and validate stock
             logger.info(f"Processing {len(cart_session.items)} cart items")
@@ -530,11 +755,25 @@ def checkout():
 
             logger.info(f"Total order amount: {total_amount}")
 
-            # Generate order ID
+            # Generate a unique order ID and avoid collisions
             import random
             import string
 
-            order_id = f"ORD-{datetime.now().strftime('%Y%m%d')}-{''.join(random.choices(string.digits, k=3))}"
+            def _generate_unique_order_id(max_attempts: int = 10) -> str:
+                for _ in range(max_attempts):
+                    candidate = f"ORD-{datetime.now().strftime('%Y%m%d')}-{''.join(random.choices(string.digits, k=6))}"
+                    try:
+                        row = db.session.execute(db.text("SELECT 1 FROM orders WHERE id = :id"), {"id": candidate}).first()
+                        if not row:
+                            return candidate
+                    except Exception:
+                        # If SELECT fails due to schema, fall back to optimistic return
+                        return candidate
+                # As a very last resort, extend with more randomness
+                from uuid import uuid4
+                return f"ORD-{datetime.now().strftime('%Y%m%d')}-{uuid4().hex[:8]}"
+
+            order_id = _generate_unique_order_id()
             logger.info(f"Generated order ID: {order_id}")
 
             # Handle coupon discount in order total
@@ -560,10 +799,40 @@ def checkout():
                 except Exception as e:
                     logger.error(f"Error processing coupon for order: {e}")
 
-            # Create order with final total (including discount)
+            # Apply credits at order placement if a plan exists from preview
+            try:
+                credit_after_pct = session.get('credit_amount_after_pct')
+                credit_breakdown = session.get('credit_breakdown')
+                if credit_breakdown is not None:
+                    expected_base = int(round(final_total))
+                    if credit_after_pct is None or abs(int(credit_after_pct) - expected_base) <= 1:
+                        # Redeem now, atomically, using breakdown
+                        idem_key = f"order:{order_id}"
+                        res = svc_apply_credits(current_user.id, expected_base, mode='manual', breakdown=credit_breakdown, idempotency_key=idem_key, related_order_id=order_id, preview=False)
+                        final_total = float(res.get('remaining_vnd'))
+                        logger.info(f"Credits redeemed at order placement: applied={res.get('credits_applied_vnd')}, remaining={final_total}")
+                    else:
+                        logger.warning("Credit base mismatch at order placement; skipping redemption")
+            except Exception as e:
+                logger.error(f"Error applying session credits to order: {e}")
+
+            # Create order with final total (including coupon and credit discounts)
             logger.info("Creating order...")
-            order = Order(
+            # Be resilient if DB hasn't been migrated yet (no 'email' / 'order_number' / 'user_id' columns)
+            try:
+                from sqlalchemy import inspect as _sa_inspect
+                _cols = {col.get('name') for col in _sa_inspect(db.engine).get_columns('orders')}
+                has_email_col = 'email' in _cols
+                has_order_number_col = 'order_number' in _cols
+                has_user_id_col = 'user_id' in _cols
+            except Exception:
+                has_email_col = False
+                has_order_number_col = False
+                has_user_id_col = False
+
+            order_kwargs = dict(
                 id=order_id,
+                **({ 'order_number': order_id } if has_order_number_col else {}),
                 customer_name=customer_name,
                 contact_number=contact_number,
                 facebook_details=request.form.get('facebook_details', ''),
@@ -575,27 +844,123 @@ def checkout():
                 shipping_city=shipping_city,
                 shipping_province=shipping_province,
                 shipping_postal_code=shipping_postal_code,
-                shipping_country=shipping_country
+                shipping_country=shipping_country,
             )
+            # Attach user_id if present and user authenticated
+            if has_user_id_col and current_user.is_authenticated:
+                try:
+                    order_kwargs['user_id'] = int(current_user.id)
+                except Exception:
+                    pass
+            # Ensure discount_amount is never NULL
+            try:
+                order_kwargs['discount_amount'] = float(discount_amount or 0.0)
+            except Exception:
+                order_kwargs['discount_amount'] = 0.0
+            # Optionally set discounted_total when a coupon is applied
+            if 'applied_coupon' in locals() and applied_coupon:
+                order_kwargs['discounted_total'] = float(final_total)
+            if has_email_col:
+                # Ensure orders are linked to the logged-in user for My Orders listing
+                acct_email = None
+                try:
+                    if current_user.is_authenticated:
+                        acct_email = getattr(current_user, 'email', None)
+                except Exception:
+                    acct_email = None
+                order_kwargs['email'] = acct_email or customer_email
+            else:
+                logger.warning("Orders table missing 'email' column; please run migrations. Proceeding without storing email.")
 
-            db.session.add(order)
-            logger.info("Order created successfully")
+            if has_email_col:
+                order = Order(**order_kwargs)
+                db.session.add(order)
+                logger.info("Order created successfully (ORM)")
+            else:
+                # Insert without email column since DB hasn't been migrated
+                cols = [
+                    'id','customer_name','contact_number','facebook_details','shipment_method','pickup_location',
+                    'status','total_amount','shipping_address','shipping_city','shipping_province','shipping_postal_code','shipping_country',
+                    'coupon_id','coupon_code','discount_amount','discounted_total'
+                ]
+                if has_order_number_col:
+                    cols.insert(1, 'order_number')
+                if has_user_id_col:
+                    cols.insert(1, 'user_id')
+                params = {c: order_kwargs.get(c) for c in cols}
+                # Ensure NOT NULL discount_amount has a value
+                if params.get('discount_amount') is None:
+                    params['discount_amount'] = float(discount_amount or 0.0)
+                # If discounted_total is required for downstream display, leave as None unless coupon applied
+                if params.get('discounted_total') is None and applied_coupon:
+                    params['discounted_total'] = float(final_total)
+                placeholders = ", ".join([f":{c}" for c in cols])
+                col_list = ", ".join(cols)
+                sql = f"INSERT INTO orders ({col_list}) VALUES ({placeholders})"
+                db.session.execute(db.text(sql), params)
+                logger.info("Order created successfully (raw SQL)")
 
             # Create order items and deduct stock
             logger.info("Creating order items and deducting stock...")
             for cart_item in cart_session.items:
                 logger.info(f"Processing order item: {cart_item.card.name if cart_item.card else 'Unknown'}")
 
-                # Create order item
-                order_item = OrderItem(
-                    order_id=order_id,
-                    card_id=cart_item.card_id if cart_item.card else cart_item.inventory_item.card_id,
-                    quantity=cart_item.quantity,
-                    unit_price=float(cart_item.display_price),
-                    total_price=float(cart_item.item_total)
-                )
-                db.session.add(order_item)
-                logger.info("Order item created")
+                # Create order items
+                if getattr(cart_item, 'item_type', None) == 'user' and cart_item.inventory_item:
+                    # Single order line for user item
+                    order_item_kwargs = {
+                        'order_id': order_id,
+                        'card_id': cart_item.inventory_item.card_id,
+                        'quantity': cart_item.quantity,
+                        'unit_price': float(cart_item.display_price),
+                        'total_price': float(cart_item.item_total),
+                        'inventory_item_id': cart_item.inventory_item_id,
+                        'seller_user_id': cart_item.inventory_item.inventory.user_id if cart_item.inventory_item.inventory else None
+                    }
+                    db.session.add(OrderItem(**order_item_kwargs))
+                    logger.info("Order item created (user inventory)")
+                else:
+                    # Admin item: attribute to consigned shop stock first (FIFO), remainder as store
+                    allocations = []  # list of (seller_user_id, qty, source_inventory_item_id)
+                    remaining = int(cart_item.quantity)
+                    try:
+                        cons_rows = (ShopInventoryItem.query
+                                     .filter(ShopInventoryItem.card_id == cart_item.card.id)
+                                     .filter(ShopInventoryItem.quantity > 0)
+                                     .order_by(ShopInventoryItem.created_at.asc(), ShopInventoryItem.id.asc())
+                                     .all())
+                    except Exception:
+                        cons_rows = []
+                    for row in cons_rows:
+                        if remaining <= 0:
+                            break
+                        take = min(int(row.quantity), remaining)
+                        if take > 0:
+                            allocations.append((row.from_user_id, take, row.source_inventory_item_id))
+                            row.quantity = int(row.quantity) - take
+                            remaining -= take
+                    # Create order items per allocation
+                    unit_price = float(cart_item.display_price)
+                    for seller_uid, q, src_item_id in allocations:
+                        db.session.add(OrderItem(
+                            order_id=order_id,
+                            card_id=cart_item.card.id,
+                            quantity=q,
+                            unit_price=unit_price,
+                            total_price=float(unit_price * q),
+                            inventory_item_id=src_item_id,
+                            seller_user_id=seller_uid
+                        ))
+                    # Remainder belongs to store
+                    if remaining > 0:
+                        db.session.add(OrderItem(
+                            order_id=order_id,
+                            card_id=cart_item.card.id,
+                            quantity=remaining,
+                            unit_price=unit_price,
+                            total_price=float(unit_price * remaining)
+                        ))
+                    logger.info("Order item(s) created (admin with consignment attribution)")
 
                 # Deduct stock based on item type
                 if cart_item.item_type == 'admin' and cart_item.card:
@@ -622,6 +987,12 @@ def checkout():
                 session.pop('applied_coupon_code', None)
                 session.pop('discount_amount', None)
                 session.pop('final_total', None)
+            # Clear credit session markers
+            session.pop('credit_amount_after_pct', None)
+            session.pop('credit_applied_vnd', None)
+            session.pop('credit_remaining_vnd', None)
+            session.pop('credit_breakdown', None)
+            session.pop('credit_mode', None)
 
             flash(f'Order {order_id} placed successfully!', 'success')
             logger.info(f"Order {order_id} completed successfully")
@@ -712,19 +1083,156 @@ def checkout():
 
     logger.info(f"Final values: total_price={total_price}, discount_amount={discount_amount}, final_total={final_total}")
 
+    # Prefill checkout form from account settings when available
+    prefill = {
+        'customer_email': '',
+        'customer_name': '',
+        'contact_number': '',
+        'shipping_address': '',
+        'shipping_city': '',
+        'shipping_province': '',
+        'shipping_postal_code': '',
+        'shipping_country': 'Vietnam',
+        'default_shipment_method': '',
+    }
+    try:
+        if current_user.is_authenticated:
+            # Inspect user table to avoid touching missing columns
+            try:
+                from sqlalchemy import inspect as _sa_inspect
+                _user_cols = {c.get('name') for c in _sa_inspect(db.engine).get_columns('users')}
+            except Exception:
+                _user_cols = set()
+
+            def _u(field):
+                if field in _user_cols:
+                    try:
+                        return getattr(current_user, field) or ''
+                    except Exception:
+                        return ''
+                return ''
+
+            prefill.update({
+                'customer_email': (getattr(current_user, 'email', '') or ''),
+                'customer_name': (_u('full_name') or getattr(current_user, 'username', '') or ''),
+                'contact_number': _u('phone_number'),
+                'shipping_address': _u('address_line'),
+                'shipping_city': _u('address_city'),
+                'shipping_province': _u('address_province'),
+                'shipping_postal_code': _u('address_postal_code'),
+                'shipping_country': (_u('address_country') or 'Vietnam'),
+            })
+            # Choose default shipment method based on presence of address
+            if any([
+                prefill['shipping_address'],
+                prefill['shipping_city'],
+                prefill['shipping_province'],
+                prefill['shipping_postal_code'],
+            ]):
+                prefill['default_shipment_method'] = 'shipping'
+    except Exception:
+        pass
+
     return render_template('checkout.html',
                           cart_items=cart_items,
                           total_price=total_price,
                           applied_coupon=applied_coupon,
                           discount_amount=discount_amount,
-                          final_total=final_total)
+                          final_total=final_total,
+                          prefill=prefill)
 
 @app.route('/order/<order_id>')
 def order_confirmation(order_id):
     """Order confirmation page"""
-    order = Order.query.get_or_404(order_id)
+    # Avoid selecting columns that may not exist yet (e.g., 'email' before migration)
+    order = (
+        Order.query.options(
+            load_only(
+                Order.id,
+                Order.customer_name,
+                Order.contact_number,
+                Order.facebook_details,
+                Order.shipment_method,
+                Order.pickup_location,
+                Order.status,
+                Order.total_amount,
+                Order.shipping_address,
+                Order.shipping_city,
+                Order.shipping_province,
+                Order.shipping_postal_code,
+                Order.shipping_country,
+                Order.created_at,
+                Order.updated_at,
+                Order.coupon_id,
+                Order.coupon_code,
+                Order.discount_amount,
+                Order.discounted_total,
+            )
+        ).get_or_404(order_id)
+    )
 
-    # Get order items with card details
+    # Get order items with card and seller details
+    order_items = []
+    for item in order.items:
+        seller_name = 'Lotus TCG Store'
+        try:
+            if getattr(item, 'seller', None):
+                seller_name = item.seller.username
+            elif getattr(item, 'seller_user_id', None):
+                u = User.query.get(item.seller_user_id)
+                if u:
+                    seller_name = u.username
+        except Exception:
+            pass
+        order_items.append({
+            'card': item.card,
+            'quantity': item.quantity,
+            'unit_price': float(item.unit_price),
+            'total_price': float(item.total_price),
+            'foiling': item.card.foiling if item.card else None,
+            'art_style': item.card.art_style if item.card else None,
+            'seller': seller_name
+        })
+
+    return render_template('order_confirmation.html',
+                          order=order,
+                          order_items=order_items)
+
+@app.route('/withdraw/<order_id>')
+@login_required
+def withdrawal_confirmation(order_id):
+    """Specialized confirmation page for withdrawal-created orders."""
+    order = (
+        Order.query.options(
+            load_only(
+                Order.id,
+                Order.customer_name,
+                Order.contact_number,
+                Order.shipment_method,
+                Order.pickup_location,
+                Order.status,
+                Order.total_amount,
+                Order.shipping_address,
+                Order.shipping_city,
+                Order.shipping_province,
+                Order.shipping_postal_code,
+                Order.shipping_country,
+                Order.created_at,
+                Order.updated_at,
+                Order.order_number,
+            )
+        ).get_or_404(order_id)
+    )
+
+    # Guard: ensure current user owns the order OR is an admin
+    try:
+        owner_ok = (getattr(order, 'user_id', None) in (None, current_user.id))
+        admin_ok = bool(getattr(current_user, 'is_admin', lambda: False)())
+        if not (owner_ok or admin_ok):
+            return redirect(url_for('my_orders'))
+    except Exception:
+        pass
+
     order_items = []
     for item in order.items:
         order_items.append({
@@ -734,9 +1242,98 @@ def order_confirmation(order_id):
             'total_price': float(item.total_price)
         })
 
-    return render_template('order_confirmation.html',
-                         order=order,
-                         order_items=order_items)
+    return render_template('withdrawal_confirmation.html', order=order, order_items=order_items)
+
+@app.route('/my-orders')
+@login_required
+def my_orders():
+    """Show the current user's previous orders and status.
+
+    Preference is to match by email on the orders table when available.
+    Falls back to matching by customer_name using full_name or username if needed.
+    """
+    try:
+        from sqlalchemy import inspect as _sa_inspect
+        order_cols = {c.get('name') for c in _sa_inspect(db.engine).get_columns('orders')}
+    except Exception:
+        order_cols = set()
+
+    q = Order.query
+    filters = []
+
+    # Cache user email for hinting and matching
+    user_email = getattr(current_user, 'email', None)
+
+    # Prefer strong match by user_id when available
+    if 'user_id' in order_cols:
+        q = q.filter(Order.user_id == current_user.id)
+    # Else prefer email match if both column and user email exist
+    elif 'email' in order_cols and user_email:
+        q = q.filter(Order.email == user_email)
+    else:
+        # Fallback to name match (less precise)
+        full_name = getattr(current_user, 'full_name', None)
+        username = getattr(current_user, 'username', None)
+        names = [n for n in (full_name, username) if n]
+        if names:
+            from sqlalchemy import or_
+            q = q.filter(or_(*[Order.customer_name == n for n in names]))
+        else:
+            # Nothing to match; render empty list with hint
+            q = q.filter(db.text('1=0'))
+
+    # Order by latest first; avoid selecting non-existent columns
+    try:
+        q = q.order_by(Order.created_at.desc())
+    except Exception:
+        pass
+
+    try:
+        orders = q.all()
+    except Exception:
+        orders = []
+
+    # Prepare lightweight dicts for template
+    rows = []
+    for o in orders:
+        try:
+            _fb = (getattr(o, 'facebook_details', '') or '')
+            rows.append({
+                'id': o.id,
+                'order_number': getattr(o, 'order_number', None),
+                'created_at': o.created_at,
+                'status': o.status,
+                'shipment_method': o.shipment_method,
+                'pickup_location': o.pickup_location,
+                'total_amount': float(o.total_amount),
+                'discount_amount': float(getattr(o, 'discount_amount', 0) or 0),
+                'discounted_total': float(getattr(o, 'discounted_total', 0) or o.total_amount),
+                'is_withdrawal': _fb.startswith('withdrawal:'),
+            })
+        except Exception:
+            # Best-effort fallback
+            rows.append({
+                'id': getattr(o, 'id', ''),
+                'order_number': getattr(o, 'order_number', None),
+                'created_at': getattr(o, 'created_at', None),
+                'status': getattr(o, 'status', ''),
+                'shipment_method': getattr(o, 'shipment_method', ''),
+                'pickup_location': getattr(o, 'pickup_location', ''),
+                'total_amount': float(getattr(o, 'total_amount', 0) or 0),
+                'discount_amount': float(getattr(o, 'discount_amount', 0) or 0),
+                'discounted_total': float(getattr(o, 'discounted_total', 0) or 0),
+                'is_withdrawal': False,
+            })
+
+    hint = None
+    if 'user_id' in order_cols:
+        hint = None
+    elif ('email' in order_cols) and not user_email:
+        hint = 'Add your email in Account Settings to link your orders.'
+    elif 'email' not in order_cols:
+        hint = "Orders don't store email yet; please run migrations to enable linking by email."
+
+    return render_template('my_orders.html', orders=rows, hint=hint)
 
 # Authentication routes
 @app.route('/login', methods=['GET', 'POST'])
@@ -966,6 +1563,9 @@ def user_inventory():
         inventory_items = []
         if user_inventory.items:
             for item in user_inventory.items:
+                # Hide items with zero quantity from inventory display
+                if getattr(item, 'quantity', 0) <= 0:
+                    continue
                 item_data = {
                     'id': item.id,
                     'card_name': item.card.name if item.card else 'Unknown Card',
@@ -977,7 +1577,8 @@ def user_inventory():
                     'added_at': item.added_at,
                     'card_image': item.card.image_url if item.card else None,
                     'card_rarity': item.card.rarity if item.card else 'Unknown',
-                    'card_price': float(item.card.price) if item.card else 0
+                    'card_price': float(item.card.price) if item.card else 0,
+                    'listed_for_sale': item.listed_for_sale
                 }
                 inventory_items.append(item_data)
 
@@ -1003,6 +1604,116 @@ def user_inventory():
         return redirect(url_for('index'))
 
 
+@app.route('/inventory/consigned')
+@login_required
+def inventory_consigned():
+    """Show current user's cards that have been sent to the shop (consigned)."""
+    try:
+        rows = (
+            db.session.query(ShopInventoryItem, Card)
+            .join(Card, Card.id == ShopInventoryItem.card_id)
+            .filter(ShopInventoryItem.from_user_id == current_user.id, ShopInventoryItem.quantity > 0)
+            .order_by(Card.name.asc())
+            .all()
+        )
+        consigned_items = []
+        for s, card in rows:
+            consigned_items.append({
+                'id': s.id,
+                'card_name': card.name,
+                'set_name': card.set_name,
+                'foiling': card.foiling,
+                'art_style': card.art_style,
+                'quantity': int(s.quantity),
+                'source_inventory_item_id': s.source_inventory_item_id
+            })
+
+        return render_template('inventory_consigned.html', items=consigned_items)
+    except Exception as e:
+        logger.error(f"Error loading consigned items for user {getattr(current_user, 'id', '?')}: {e}")
+        flash('Failed to load cards sent to shop.', 'error')
+        return redirect(url_for('user_inventory'))
+
+
+@app.route('/api/inventory/consignment/<int:shop_item_id>/withdraw', methods=['POST'])
+@login_required
+def api_withdraw_consignment(shop_item_id):
+    """Withdraw a specified quantity from a consigned shop row back to user's inventory."""
+    try:
+        payload = request.get_json() or {}
+        qty_req = int(payload.get('quantity', 0))
+        if qty_req <= 0:
+            return jsonify({'success': False, 'error': 'Invalid quantity'}), 400
+
+        s = ShopInventoryItem.query.get_or_404(shop_item_id)
+        if s.from_user_id != current_user.id:
+            return jsonify({'success': False, 'error': 'Not authorized'}), 403
+
+        if s.quantity <= 0:
+            return jsonify({'success': False, 'error': 'Nothing to withdraw'}), 400
+
+        qty = min(qty_req, int(s.quantity))
+
+        # Reduce admin stock
+        try:
+            c = Card.query.get(s.card_id)
+            if c:
+                c.quantity = max(0, int(c.quantity) - qty)
+        except Exception:
+            pass
+
+        # Return to user's inventory
+        src_item = InventoryItem.query.get(s.source_inventory_item_id) if s.source_inventory_item_id else None
+        if src_item and src_item.inventory and src_item.inventory.user_id == current_user.id:
+            src_item.quantity += qty
+            src_item.updated_at = db.func.now()
+        else:
+            # Merge into or create a matching inventory item for this user
+            inv = UserInventory.query.filter_by(user_id=current_user.id).first()
+            if not inv:
+                inv = UserInventory(user_id=current_user.id, is_public=False)
+                db.session.add(inv)
+                db.session.flush()
+            merge_item = InventoryItem.query.filter_by(inventory_id=inv.id, card_id=s.card_id).first()
+            if merge_item:
+                merge_item.quantity += qty
+                merge_item.updated_at = db.func.now()
+            else:
+                merge_item = InventoryItem(
+                    inventory_id=inv.id,
+                    card_id=s.card_id,
+                    quantity=qty,
+                    condition='Near Mint',
+                    verification_status='verified',
+                    is_verified=True,
+                    notes='[withdraw_from_shop]',
+                    language='English',
+                    foil_type='Non Foil',
+                    is_mint=False,
+                    is_public=False,
+                )
+                db.session.add(merge_item)
+
+        # Decrement consigned row and log
+        s.quantity = int(s.quantity) - qty
+        try:
+            db.session.add(ShopConsignmentLog(
+                card_id=s.card_id,
+                from_user_id=s.from_user_id,
+                source_inventory_item_id=s.source_inventory_item_id,
+                quantity=qty,
+                action='withdraw'
+            ))
+        except Exception:
+            pass
+
+        db.session.commit()
+        return jsonify({'success': True, 'withdrawn': qty, 'remaining': int(s.quantity), 'card_id': s.card_id})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error withdrawing consignment {shop_item_id}: {e}")
+        return jsonify({'success': False, 'error': 'Failed to withdraw'}), 500
+
 @app.route('/user/<int:user_id>/inventory')
 @login_required
 def view_user_inventory(user_id):
@@ -1022,7 +1733,8 @@ def view_user_inventory(user_id):
         inventory_items = []
         if user_inventory.items:
             for item in user_inventory.items:
-                if item.is_verified:  # Only show verified items in public view
+                # Only show verified items with positive quantity in public view
+                if item.is_verified and getattr(item, 'quantity', 0) > 0:
                     item_data = {
                         'id': item.id,
                         'card_name': item.card.name if item.card else 'Unknown Card',
@@ -1090,6 +1802,50 @@ def toggle_inventory_visibility():
             'error': 'Failed to update inventory visibility'
         }), 500
 
+@app.route('/api/users/search')
+@login_required
+def api_search_users():
+    """Autocomplete search for users by username/email/full name (active only)."""
+    try:
+        q = (request.args.get('q') or '').strip()
+        try:
+            limit = max(1, min(25, int(request.args.get('limit', 10))))
+        except Exception:
+            limit = 10
+
+        if not q:
+            return jsonify({'results': []})
+
+        # Only active users, exclude super_admins and self
+        base = User.query.filter(
+            db.and_(
+                User.account_status == 'active',
+                User.role != 'super_admin',
+                User.id != current_user.id
+            )
+        )
+
+        like = f"%{q}%"
+        base = base.filter(
+            db.or_(
+                User.username.ilike(like),
+                User.email.ilike(like),
+                User.full_name.ilike(like)
+            )
+        ).order_by(User.username.asc()).limit(limit)
+
+        results = [
+            {
+                'id': u.id,
+                'username': u.username,
+                'full_name': u.full_name
+            } for u in base.all()
+        ]
+        return jsonify({'results': results})
+    except Exception as e:
+        logger.error({'event': 'api_search_users_error', 'error': str(e)})
+        return jsonify({'results': []}), 200
+
 @app.route('/api/inventory/add-item', methods=['POST'])
 @login_required
 @rate_limit_inventory_operations
@@ -1143,6 +1899,12 @@ def add_inventory_item():
         if data.get('foil_type') and data['foil_type'] not in valid_foil_types and data['foil_type'] != '':
             errors.append(f'Invalid foil type. Must be one of: {", ".join(valid_foil_types)} or empty')
 
+        # Disallow adding CREDIT tokens into personal inventory
+        token_names = {'copper token', 'silver token', 'gold token'}
+        requested_set = str(data.get('card_set', '') or '').strip()
+        if card_name.lower() in token_names or requested_set.upper() == 'CREDIT':
+            return jsonify({'success': False, 'error': 'Credit tokens cannot be imported into personal inventory'}), 400
+
         if errors:
             return jsonify({
                 'success': False,
@@ -1175,6 +1937,12 @@ def add_inventory_item():
             )
             db.session.add(card)
             db.session.commit()
+        # Block if card is a CREDIT token card
+        try:
+            if getattr(card, 'is_credit', False) or (str(card.set_name).upper() == 'CREDIT'):
+                return jsonify({'success': False, 'error': 'Credit tokens cannot be imported into personal inventory'}), 400
+        except Exception:
+            pass
 
         # Check if user already has this card in their inventory
         existing_item = InventoryItem.query.filter_by(
@@ -1670,6 +2438,50 @@ def admin():
     users = User.query.all()
     return render_template('admin.html', cards=cards, users=users)
 
+@app.route('/admin/consignments')
+@admin_required
+def admin_consignments():
+    """List cards consigned to shop with owner info"""
+    try:
+        rows = (db.session.query(ShopInventoryItem, Card, User)
+                .join(Card, Card.id == ShopInventoryItem.card_id)
+                .join(User, User.id == ShopInventoryItem.from_user_id)
+                .filter(ShopInventoryItem.quantity > 0)
+                .order_by(Card.name.asc(), ShopInventoryItem.created_at.asc())
+                .all())
+        consignments = []
+        for s, card, user in rows:
+            consignments.append({
+                'card_name': card.name,
+                'foiling': card.foiling,
+                'art_style': card.art_style,
+                'owner': user.username,
+                'quantity': int(s.quantity)
+            })
+        # Load history
+        hist_rows = (db.session.query(ShopConsignmentLog, Card, User)
+                     .join(Card, Card.id == ShopConsignmentLog.card_id)
+                     .join(User, User.id == ShopConsignmentLog.from_user_id)
+                     .order_by(ShopConsignmentLog.created_at.desc(), ShopConsignmentLog.id.desc())
+                     .limit(500)
+                     .all())
+        history = []
+        for h, card, user in hist_rows:
+            history.append({
+                'created_at': h.created_at,
+                'action': h.action,
+                'card_name': card.name,
+                'foiling': card.foiling,
+                'art_style': card.art_style,
+                'owner': user.username,
+                'quantity': int(h.quantity)
+            })
+    except Exception as e:
+        logger.error(f"Error loading consignments: {e}")
+        consignments = []
+        history = []
+    return render_template('admin_consignments.html', consignments=consignments, history=history)
+
 @app.route('/admin/upload_csv', methods=['POST'])
 @admin_required
 def upload_csv():
@@ -1985,12 +2797,256 @@ def download_user_inventory_template_csv():
     )
 
 
+@app.route('/inventory/withdraw', methods=['POST'])
+@login_required
+def inventory_withdraw():
+    """Withdraw cards from the user's inventory to a pickup location or shipping address.
+
+    Accepts JSON body:
+    {
+      "items": [{"inventory_item_id": int, "quantity": int}, ...],
+      "shipment_method": "pickup"|"shipping",
+      "pickup_location": "Iron Hammer"|"Floating Dojo",  # required when pickup
+      "shipping": {                                        # required when shipping (missing values fallback to profile)
+        "address": str,
+        "city": str,
+        "province": str,
+        "postal_code": str,
+        "country": str
+      }
+    }
+
+    Returns JSON: { success, request_id, method, items, message, ... }
+    """
+    try:
+        if not request.is_json:
+            return jsonify({'success': False, 'error': 'Request must be JSON'}), 400
+
+        data = request.get_json(silent=True) or {}
+        items = data.get('items') or []
+        method = (data.get('shipment_method') or '').strip().lower()
+
+        if not items or not isinstance(items, list):
+            return jsonify({'success': False, 'error': 'No items provided'}), 400
+        if method not in ('pickup', 'shipping'):
+            return jsonify({'success': False, 'error': 'Invalid shipment_method'}), 400
+
+        # Validate destination details
+        dest = {}
+        if method == 'pickup':
+            pickup_location = (data.get('pickup_location') or '').strip()
+            if pickup_location not in ('Iron Hammer', 'Floating Dojo'):
+                return jsonify({'success': False, 'error': 'Invalid pickup location'}), 400
+            dest['pickup_location'] = pickup_location
+        else:
+            ship = data.get('shipping') or {}
+            # Fallback to profile fields if some are missing
+            def _profile(field, default=''):
+                try:
+                    return getattr(current_user, field) or default
+                except Exception:
+                    return default
+            address = (ship.get('address') or _profile('address_line') or '').strip()
+            city = (ship.get('city') or _profile('address_city') or '').strip()
+            province = (ship.get('province') or _profile('address_province') or '').strip()
+            postal_code = (ship.get('postal_code') or _profile('address_postal_code') or '').strip()
+            country = (ship.get('country') or _profile('address_country', 'Vietnam') or 'Vietnam').strip()
+            if not all([address, city, province, postal_code]):
+                return jsonify({'success': False, 'error': 'Shipping address is incomplete'}), 400
+            dest.update({
+                'address': address,
+                'city': city,
+                'province': province,
+                'postal_code': postal_code,
+                'country': country,
+            })
+
+        # Load and validate items ownership and quantities
+        updated = []
+        from models import InventoryItem
+        total_units = 0
+
+        for entry in items:
+            try:
+                item_id = int(entry.get('inventory_item_id'))
+                qty = int(entry.get('quantity', 0))
+            except Exception:
+                return jsonify({'success': False, 'error': 'Invalid item specification'}), 400
+            if qty <= 0:
+                return jsonify({'success': False, 'error': 'Quantity must be > 0'}), 400
+
+            item = InventoryItem.query.get(item_id)
+            if not item or not item.inventory or item.inventory.user_id != current_user.id:
+                return jsonify({'success': False, 'error': f'Item {item_id} not found or not owned'}), 404
+            # Only verified items may be withdrawn
+            try:
+                is_verified = bool(getattr(item, 'is_verified', False))
+                status = (getattr(item, 'verification_status', None) or '').lower()
+            except Exception:
+                is_verified = False
+                status = ''
+            if not (is_verified or status == 'verified'):
+                return jsonify({'success': False, 'error': f'Item {item_id} is not verified and cannot be withdrawn'}), 400
+            if item.quantity < qty:
+                return jsonify({'success': False, 'error': f'Insufficient quantity for item {item_id}'}), 400
+
+            updated.append((item, qty))
+            total_units += qty
+
+        # Generate IDs
+        from datetime import datetime as _dt
+        import random, string
+        request_id = f"WD-{_dt.utcnow().strftime('%Y%m%d%H%M%S')}-{''.join(random.choices(string.digits, k=5))}"
+
+        def _generate_order_id(max_attempts: int = 10) -> str:
+            for _ in range(max_attempts):
+                candidate = f"WD-{_dt.utcnow().strftime('%Y%m%d')}-{''.join(random.choices(string.digits, k=6))}"
+                try:
+                    row = db.session.execute(db.text("SELECT 1 FROM orders WHERE id = :id"), {"id": candidate}).first()
+                    if not row:
+                        return candidate
+                except Exception:
+                    return candidate
+            from uuid import uuid4
+            return f"WD-{_dt.utcnow().strftime('%Y%m%d')}-{uuid4().hex[:6]}"
+
+        order_id = _generate_order_id()
+
+        # Create an Order representing this withdrawal and update inventory atomically
+        try:
+            # Compute totals and destination string
+            total_amount = 0.0
+            for it, qty in updated:
+                price = float(it.card.price) if it.card else 0.0
+                total_amount += price * qty
+
+            # Build order fields
+            customer_name = ''
+            try:
+                customer_name = (getattr(current_user, 'full_name', None) or getattr(current_user, 'username', '') or '').strip()
+            except Exception:
+                pass
+            contact_number = ''
+            try:
+                contact_number = getattr(current_user, 'phone_number', '') or ''
+            except Exception:
+                pass
+
+            # Create Order
+            order = Order(
+                id=order_id,
+                order_number=order_id,
+                user_id=int(current_user.id),
+                email=getattr(current_user, 'email', None),
+                customer_name=customer_name or 'Customer',
+                contact_number=contact_number,
+                facebook_details=f'withdrawal:{request_id}',
+                shipment_method=method,
+                pickup_location=dest.get('pickup_location') if method == 'pickup' else None,
+                status='pending',
+                total_amount=float(total_amount),
+                shipping_address=dest.get('address') if method == 'shipping' else None,
+                shipping_city=dest.get('city') if method == 'shipping' else None,
+                shipping_province=dest.get('province') if method == 'shipping' else None,
+                shipping_postal_code=dest.get('postal_code') if method == 'shipping' else None,
+                shipping_country=dest.get('country') if method == 'shipping' else None,
+            )
+            db.session.add(order)
+
+            # Create OrderItems and update/delete inventory items
+            for it, qty in updated:
+                unit_price = float(it.card.price) if it.card else 0.0
+                total_price = unit_price * qty
+                oi = OrderItem(
+                    order_id=order_id,
+                    card_id=int(it.card_id),
+                    quantity=int(qty),
+                    unit_price=float(unit_price),
+                    total_price=float(total_price),
+                )
+                db.session.add(oi)
+
+                # Apply withdrawal to inventory; remove row if zero
+                remaining = int(it.quantity) - int(qty)
+                if remaining <= 0:
+                    db.session.delete(it)
+                else:
+                    it.quantity = remaining
+                    db.session.add(it)
+
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Withdraw commit failed: {e}")
+            return jsonify({'success': False, 'error': 'Failed to process withdrawal'}), 500
+
+        # Audit log
+        try:
+            dest_desc = dest.get('pickup_location') if method == 'pickup' else (
+                f"{dest.get('address')}, {dest.get('city')}, {dest.get('province')} {dest.get('postal_code')}, {dest.get('country')}"
+            )
+            item_summ = ", ".join([f"{qty} x {it.card.name if it.card else 'Unknown'}(#{it.id})" for it, qty in updated])
+            UserAuditLog.create_log(
+                user_id=current_user.id,
+                admin_id=current_user.id,
+                action='inventory_withdraw',
+                details=f"request_id={request_id}; method={method}; dest={dest_desc}; items=[{item_summ}]",
+                ip_address=request.remote_addr,
+                user_agent=request.headers.get('User-Agent')
+            )
+        except Exception as e:
+            logger.warning(f"Audit log failed for withdraw {request_id}: {e}")
+
+        # Response payload
+        return jsonify({
+            'success': True,
+            'request_id': request_id,
+            'method': method,
+            **({'pickup_location': dest['pickup_location']} if method == 'pickup' else {'shipping': dest}),
+            'items': [
+                {
+                    'inventory_item_id': it.id,
+                    'card_name': it.card.name if it.card else 'Unknown',
+                    'withdrawn_quantity': qty,
+                    'remaining_quantity': max(0, int(it.quantity) - int(qty)),
+                }
+                for it, qty in updated
+            ],
+            'total_units': total_units,
+            'order_id': order_id,
+            'message': 'Withdrawal request recorded and quantities updated.'
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error in inventory_withdraw: {e}")
+        return jsonify({'success': False, 'error': 'Unexpected error'}), 500
+
 @app.route('/account/settings', methods=['GET', 'POST'])
 @login_required
 def account_settings():
     """User account settings page"""
     if request.method == 'POST':
         try:
+            # Ensure required user contact columns exist (best-effort, idempotent)
+            try:
+                from sqlalchemy import inspect as _sa_inspect
+                _cols = {c.get('name') for c in _sa_inspect(db.engine).get_columns('users')}
+                _needed = {
+                    'full_name', 'phone_number', 'address_line', 'address_city',
+                    'address_province', 'address_postal_code', 'address_country'
+                }
+                if not _needed.issubset(_cols):
+                    try:
+                        # Attempt manual migration using current DB path plus common instance DBs
+                        from apply_user_contact_fields import apply_user_contact_fields as _apply_user_cols
+                        _db_path = getattr(getattr(db, 'engine', None), 'url', None)
+                        _db_path = getattr(_db_path, 'database', None)
+                        _candidates = [_db_path] if _db_path else None
+                        _apply_user_cols(_candidates)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
             # Get form data
             username = request.form.get('username', '').strip()
             email = request.form.get('email', '').strip()
@@ -1999,26 +3055,9 @@ def account_settings():
             confirm_password = request.form.get('confirm_password', '')
             two_factor_enabled = 'two_factor_enabled' in request.form
 
-            # Validate username
-            if not username:
-                flash('Username is required.', 'error')
-                return redirect(request.url)
-
-            if len(username) < 3:
-                flash('Username must be at least 3 characters long.', 'error')
-                return redirect(request.url)
-
-            if not re.match(r'^[a-zA-Z0-9_]+$', username):
-                flash('Username can only contain letters, numbers, and underscores.', 'error')
-                return redirect(request.url)
-
-            # Check if username is already taken by another user
-            existing_user = User.query.filter(
-                db.and_(User.username == username, User.id != current_user.id)
-            ).first()
-
-            if existing_user:
-                flash('Username is already taken.', 'error')
+            # Username changes are disabled; if a different value is submitted, reject
+            if username and username != current_user.username:
+                flash('Changing username is not permitted.', 'error')
                 return redirect(request.url)
 
             # Validate email if provided
@@ -2026,9 +3065,9 @@ def account_settings():
                 flash('Please enter a valid email address.', 'error')
                 return redirect(request.url)
 
-            # Check if email is already taken by another user
+            # Check if email is already taken by another user (use minimal projection)
             if email:
-                existing_email = User.query.filter(
+                existing_email = db.session.query(User.id).filter(
                     db.and_(User.email == email, User.id != current_user.id)
                 ).first()
 
@@ -2075,9 +3114,7 @@ def account_settings():
             # Update user information
             changes_made = []
 
-            if current_user.username != username:
-                changes_made.append(f'username: {current_user.username} → {username}')
-                current_user.username = username
+            # Username changes are disabled
 
             if current_user.email != email:
                 changes_made.append(f'email: {current_user.email or "None"} → {email or "None"}')
@@ -2089,6 +3126,29 @@ def account_settings():
             if current_user.two_factor_enabled != two_factor_enabled:
                 changes_made.append(f'two-factor auth: {"enabled" if current_user.two_factor_enabled else "disabled"} → {"enabled" if two_factor_enabled else "disabled"}')
                 current_user.two_factor_enabled = two_factor_enabled
+
+            # Contact and address fields
+            full_name = request.form.get('full_name', '').strip()
+            phone_number = request.form.get('phone_number', '').strip()
+            address_line = request.form.get('address_line', '').strip()
+            address_city = request.form.get('address_city', '').strip()
+            address_province = request.form.get('address_province', '').strip()
+            address_postal_code = request.form.get('address_postal_code', '').strip()
+            address_country = request.form.get('address_country', '').strip() or 'Vietnam'
+
+            def _apply_change(attr, new_val, label):
+                old_val = getattr(current_user, attr, None)
+                if old_val != new_val:
+                    changes_made.append(f"{label}: {old_val or 'None'} → {new_val or 'None'}")
+                    setattr(current_user, attr, new_val)
+
+            _apply_change('full_name', full_name, 'full_name')
+            _apply_change('phone_number', phone_number, 'phone_number')
+            _apply_change('address_line', address_line, 'address')
+            _apply_change('address_city', address_city, 'city')
+            _apply_change('address_province', address_province, 'province')
+            _apply_change('address_postal_code', address_postal_code, 'postal_code')
+            _apply_change('address_country', address_country, 'country')
 
             # Save changes
             db.session.commit()
@@ -2109,10 +3169,40 @@ def account_settings():
 
         except Exception as e:
             db.session.rollback()
-            logger.error(f"Error updating account settings for user {current_user.id}: {e}")
+            try:
+                uid = current_user.get_id()
+            except Exception:
+                uid = 'unknown'
+            logger.error(f"Error updating account settings for user {uid}: {e}")
             flash('An error occurred while updating your account settings.', 'error')
 
-    return render_template('account_settings.html')
+    # Build a safe profile context that does not touch columns missing in DB
+    try:
+        from sqlalchemy import inspect as _sa_inspect
+        user_cols = {c.get('name') for c in _sa_inspect(db.engine).get_columns('users')}
+    except Exception:
+        user_cols = set()
+
+    def safe_val(field):
+        if field in user_cols:
+            try:
+                return getattr(current_user, field) or ''
+            except Exception:
+                return ''
+        return ''
+
+    profile = {
+        'full_name': safe_val('full_name'),
+        'phone_number': safe_val('phone_number'),
+        'address_line': safe_val('address_line'),
+        'address_city': safe_val('address_city'),
+        'address_province': safe_val('address_province'),
+        'address_postal_code': safe_val('address_postal_code'),
+        'address_country': safe_val('address_country') or 'Vietnam',
+        'email': safe_val('email') or (current_user.email if hasattr(current_user, 'email') else ''),
+    }
+
+    return render_template('account_settings.html', profile=profile)
 
 # Error handlers
 @app.errorhandler(404)
@@ -2139,9 +3229,13 @@ def cart_processor():
 @app.context_processor
 def auth_processor():
     """Add authentication info to all templates"""
+    try:
+        is_admin = bool(current_user.is_authenticated and getattr(current_user, 'role', None) in ('admin', 'super_admin'))
+    except Exception:
+        is_admin = False
     return {
         'current_user': current_user,
-        'is_admin': current_user.is_authenticated and current_user.is_admin() if hasattr(current_user, 'is_admin') else False
+        'is_admin': is_admin,
     }
 
 # New admin routes for inline editing and deletion
@@ -2528,7 +3622,104 @@ def _add_to_cart(item_type, item_id, quantity=1):
 def admin_orders():
     """Admin orders list page"""
     orders = Order.query.order_by(Order.created_at.desc()).all()
-    return render_template('admin_orders.html', orders=orders)
+    # Exclude withdrawal-created orders from the main list
+    filtered_orders = []
+    for o in orders:
+        try:
+            fb = (getattr(o, 'facebook_details', '') or '')
+            if fb.startswith('withdrawal:'):
+                continue
+        except Exception:
+            pass
+        filtered_orders.append(o)
+
+    # Load recent inventory withdrawal requests from audit logs
+    try:
+        from models import UserAuditLog
+        logs = (
+            UserAuditLog.query
+            .filter_by(action='inventory_withdraw')
+            .order_by(UserAuditLog.created_at.desc())
+            .limit(100)
+            .all()
+        )
+
+        def _parse_details(s: str) -> dict:
+            out = {}
+            try:
+                # Split by ';' tokens like 'key=value'
+                parts = [p.strip() for p in (s or '').split(';') if p.strip()]
+                for p in parts:
+                    if '=' in p:
+                        k, v = p.split('=', 1)
+                        out[k.strip()] = v.strip()
+            except Exception:
+                pass
+            return out
+
+        withdrawals = []
+        for log in logs:
+            d = _parse_details(getattr(log, 'details', '') or '')
+            req_id = d.get('request_id')
+            # resolve linked order if present
+            order_obj = None
+            if req_id:
+                try:
+                    order_obj = Order.query.filter_by(facebook_details=f'withdrawal:{req_id}').order_by(Order.created_at.desc()).first()
+                except Exception:
+                    order_obj = None
+            withdrawals.append({
+                'created_at': getattr(log, 'created_at', None),
+                'user': getattr(log, 'user', None),
+                'request_id': req_id,
+                'method': d.get('method'),
+                'dest': d.get('dest'),
+                'items': d.get('items'),
+                'order': order_obj,
+            })
+    except Exception as e:
+        logger.error(f"Error loading withdrawal logs: {e}")
+        withdrawals = []
+
+    return render_template('admin_orders.html', orders=filtered_orders, withdrawals=withdrawals)
+
+@app.route('/admin/withdrawals/<request_id>/approve', methods=['POST'])
+@admin_required
+def admin_withdraw_approve(request_id):
+    """Approve a withdrawal request by marking the linked order confirmed."""
+    try:
+        order = Order.query.filter_by(facebook_details=f'withdrawal:{request_id}').order_by(Order.created_at.desc()).first()
+        if not order:
+            flash('Withdrawal order not found', 'error')
+            return redirect(url_for('admin_orders'))
+        order.status = 'confirmed'
+        order.updated_at = db.func.now()
+        db.session.commit()
+        flash(f'Withdrawal {request_id} approved (order {order.id})', 'success')
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Approve withdrawal failed: {e}")
+        flash('Failed to approve withdrawal', 'error')
+    return redirect(url_for('admin_orders'))
+
+@app.route('/admin/withdrawals/<request_id>/reject', methods=['POST'])
+@admin_required
+def admin_withdraw_reject(request_id):
+    """Reject a withdrawal request by marking the linked order rejected."""
+    try:
+        order = Order.query.filter_by(facebook_details=f'withdrawal:{request_id}').order_by(Order.created_at.desc()).first()
+        if not order:
+            flash('Withdrawal order not found', 'error')
+            return redirect(url_for('admin_orders'))
+        order.status = 'rejected'
+        order.updated_at = db.func.now()
+        db.session.commit()
+        flash(f'Withdrawal {request_id} rejected (order {order.id})', 'success')
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Reject withdrawal failed: {e}")
+        flash('Failed to reject withdrawal', 'error')
+    return redirect(url_for('admin_orders'))
 
 @app.route('/admin/orders/<order_id>')
 @admin_required
@@ -2543,321 +3734,268 @@ def admin_order_detail(order_id):
             'card': item.card,
             'quantity': item.quantity,
             'unit_price': float(item.unit_price),
-            'total_price': float(item.total_price)
+            'total_price': float(item.total_price),
+            'foiling': item.card.foiling if item.card else None,
+            'art_style': item.card.art_style if item.card else None,
         })
 
     return render_template('admin_order_detail.html',
                          order=order,
                          order_items=order_items)
 
+# API: Toggle list-for-sale for a user's inventory item
+@app.route('/api/inventory/item/<int:item_id>/list', methods=['POST'])
+@login_required
+def api_list_inventory_item(item_id):
+    try:
+        data = request.get_json() or {}
+        listed = bool(data.get('listed', False))
+        qty_req = data.get('quantity')
+
+        item = InventoryItem.query.get_or_404(item_id)
+        # Ownership check
+        if not item.inventory or item.inventory.user_id != current_user.id:
+            return jsonify({'success': False, 'error': 'Not authorized'}), 403
+
+        # Validations for listing
+        if listed:
+            # Block listing credit tokens (CREDIT set) or the known token names
+            try:
+                token_names = {'copper token', 'silver token', 'gold token'}
+                card = item.card
+                if card and ((getattr(card, 'is_credit', False)) or str(card.set_name).upper() == 'CREDIT' or str(card.name).lower() in token_names):
+                    return jsonify({'success': False, 'error': 'Credit tokens cannot be listed for sale in shop'}), 400
+            except Exception:
+                pass
+            if not item.is_verified:
+                return jsonify({'success': False, 'error': 'Item must be verified to list'}), 400
+            if item.quantity <= 0:
+                return jsonify({'success': False, 'error': 'Item out of stock'}), 400
+            # Quantity to move into shop
+            try:
+                qty_to_move = int(qty_req) if qty_req is not None else int(item.quantity)
+            except Exception:
+                qty_to_move = int(item.quantity)
+            qty_to_move = max(1, min(int(item.quantity), qty_to_move))
+
+            # Ensure public visibility when listing
+            item.is_public = True
+
+            # Move to shop inventory (consignment)
+            # 1) decrement user inventory
+            item.quantity -= qty_to_move
+            # If partial consignment, create a duplicate marker item
+            if qty_to_move > 0 and item.quantity >= 0 and qty_to_move > 0:
+                try:
+                    if item.quantity >= 0 and qty_to_move < (item.quantity + qty_to_move):
+                        duplicate_item = InventoryItem(
+                            inventory_id=item.inventory_id,
+                            card_id=item.card_id,
+                            quantity=qty_to_move,
+                            condition=item.condition,
+                            verification_status=item.verification_status,
+                            is_verified=item.is_verified,
+                            notes=(item.notes or '') + ' [consigned_to_shop]',
+                            grade=item.grade,
+                            language=item.language,
+                            foil_type=item.foil_type,
+                            is_mint=item.is_mint,
+                            is_public=False
+                        )
+                        db.session.add(duplicate_item)
+                        db.session.flush()
+                except Exception:
+                    pass
+            # 2) increment shop consignment record
+            shop_row = ShopInventoryItem.query.filter_by(
+                card_id=item.card_id,
+                from_user_id=item.inventory.user_id,
+                source_inventory_item_id=item.id,
+            ).first()
+            if not shop_row:
+                shop_row = ShopInventoryItem(
+                    card_id=item.card_id,
+                    from_user_id=item.inventory.user_id,
+                    source_inventory_item_id=item.id,
+                    quantity=0,
+                )
+                db.session.add(shop_row)
+                db.session.flush()
+            shop_row.quantity += qty_to_move
+            # Log history
+            try:
+                db.session.add(ShopConsignmentLog(
+                    card_id=item.card_id,
+                    from_user_id=item.inventory.user_id,
+                    source_inventory_item_id=item.id,
+                    quantity=qty_to_move,
+                    action='list'
+                ))
+            except Exception:
+                pass
+
+            # 3) optionally reflect in admin stock for catalog visibility
+            card = item.card
+            if card:
+                try:
+                    card.quantity = int(card.quantity) + qty_to_move
+                except Exception:
+                    pass
+
+            # Reset list-for-sale flag after sending
+            item.listed_for_sale = False
+            item.updated_at = db.func.now()
+            db.session.commit()
+
+            return jsonify({'success': True, 'listed_for_sale': False, 'moved': qty_to_move, 'is_public': item.is_public, 'card_id': item.card_id})
+        else:
+            # Unlist: move all consigned units for this source back to user inventory
+            shop_row = ShopInventoryItem.query.filter_by(
+                card_id=item.card_id,
+                from_user_id=item.inventory.user_id,
+                source_inventory_item_id=item.id,
+            ).first()
+            moved_back = 0
+            if shop_row and shop_row.quantity > 0:
+                moved_back = int(shop_row.quantity)
+                # 1) reduce admin stock
+                if item.card:
+                    try:
+                        item.card.quantity = max(0, int(item.card.quantity) - moved_back)
+                    except Exception:
+                        pass
+                # 2) add back to user inventory
+                item.quantity += moved_back
+                shop_row.quantity = 0
+                # Log history
+                try:
+                    db.session.add(ShopConsignmentLog(
+                        card_id=item.card_id,
+                        from_user_id=item.inventory.user_id,
+                        source_inventory_item_id=item.id,
+                        quantity=moved_back,
+                        action='unlist'
+                    ))
+                except Exception:
+                    pass
+            item.listed_for_sale = False
+            item.updated_at = db.func.now()
+            db.session.commit()
+
+            return jsonify({'success': True, 'listed_for_sale': False, 'moved_back': moved_back, 'is_public': item.is_public})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error toggling list-for-sale: {e}")
+        return jsonify({'success': False, 'error': 'Failed to update listing status'}), 500
+
 @app.route('/admin/orders/<order_id>/fulfill', methods=['POST'])
 @admin_required
 def admin_fulfill_order(order_id):
-    """Fulfill an order"""
+    """Confirm an order"""
     order = Order.query.get_or_404(order_id)
 
     if order.status != 'pending':
-        flash('Only pending orders can be fulfilled', 'warning')
+        flash('Only pending orders can be confirmed', 'warning')
         return redirect(url_for('admin_orders'))
-    
-    
-    # User Management Routes
-    
-    @app.route('/admin/users')
-    @admin_required
-    def admin_users():
-        """Admin user management page with search, filter, and sort capabilities"""
-        try:
-            # Get query parameters
-            page = request.args.get('page', 1, type=int)
-            per_page = request.args.get('per_page', 20, type=int)
-            search = request.args.get('search', '').strip()
-            role_filter = request.args.get('role', '')
-            status_filter = request.args.get('status', '')
-            sort_by = request.args.get('sort', 'created_at_desc')
-    
-            # Build query
-            query = User.query
-    
-            # Apply search filter
-            if search:
-                query = query.filter(
-                    db.or_(
-                        User.username.ilike(f'%{search}%'),
-                        User.email.ilike(f'%{search}%')
-                    )
-                )
-    
-            # Apply role filter
-            if role_filter:
-                query = query.filter(User.role == role_filter)
-    
-            # Apply status filter
-            if status_filter:
-                query = query.filter(User.account_status == status_filter)
-    
-            # Apply sorting
-            if sort_by == 'username_asc':
-                query = query.order_by(User.username.asc())
-            elif sort_by == 'username_desc':
-                query = query.order_by(User.username.desc())
-            elif sort_by == 'email_asc':
-                query = query.order_by(User.email.asc())
-            elif sort_by == 'email_desc':
-                query = query.order_by(User.email.desc())
-            elif sort_by == 'created_at_asc':
-                query = query.order_by(User.created_at.asc())
-            elif sort_by == 'created_at_desc':
-                query = query.order_by(User.created_at.desc())
-            elif sort_by == 'last_login_asc':
-                query = query.order_by(User.last_login.asc().nulls_last())
-            elif sort_by == 'last_login_desc':
-                query = query.order_by(User.last_login.desc().nulls_first())
-            else:
-                query = query.order_by(User.created_at.desc())
-    
-            # Paginate results
-            users_pagination = query.paginate(page=page, per_page=per_page, error_out=False)
-            users = users_pagination.items
-    
-            # Get statistics
-            total_users = User.query.count()
-            active_users = User.query.filter_by(account_status='active').count()
-            suspended_users = User.query.filter_by(account_status='suspended').count()
-            banned_users = User.query.filter_by(account_status='banned').count()
-            admin_users = User.query.filter_by(role='admin').count()
-    
-            return render_template('admin_users.html',
-                                 users=users,
-                                 pagination=users_pagination,
-                                 search=search,
-                                 role_filter=role_filter,
-                                 status_filter=status_filter,
-                                 sort_by=sort_by,
-                                 per_page=per_page,
-                                 total_users=total_users,
-                                 active_users=active_users,
-                                 suspended_users=suspended_users,
-                                 banned_users=banned_users,
-                                 admin_users=admin_users)
-    
-        except Exception as e:
-            logger.error(f"Error loading admin users page: {e}")
-            flash('An error occurred while loading the users page.', 'error')
-            return redirect(url_for('admin'))
-    
-    
-    @app.route('/admin/users/<int:user_id>')
-    @admin_required
-    def admin_user_detail(user_id):
-        """View detailed information about a specific user"""
-        try:
-            user = User.query.get_or_404(user_id)
-    
-            # Get user's inventory statistics
-            user_inventory = UserInventory.query.filter_by(user_id=user_id).first()
-            inventory_stats = {'total_items': 0, 'verified_items': 0, 'total_value': 0}
-    
-            if user_inventory:
-                inventory_items = user_inventory.items
-                inventory_stats['total_items'] = sum(item.quantity for item in inventory_items)
-                inventory_stats['verified_items'] = sum(1 for item in inventory_items if item.is_verified)
-                inventory_stats['total_value'] = sum(item.total_value for item in inventory_items)
-    
-            # Get recent activity (orders)
-            recent_orders = Order.query.filter_by(customer_name=user.username).order_by(Order.created_at.desc()).limit(5).all()
-    
-            return render_template('admin_user_detail.html',
-                                 user=user,
-                                 inventory_stats=inventory_stats,
-                                 recent_orders=recent_orders)
-    
-        except Exception as e:
-            logger.error(f"Error loading user detail page for user {user_id}: {e}")
-            flash('An error occurred while loading the user details.', 'error')
-            return redirect(url_for('admin_users'))
-    
-    
-    @app.route('/admin/users/<int:user_id>/edit', methods=['GET', 'POST'])
-    @admin_required
-    def admin_edit_user(user_id):
-        """Edit user account information"""
-        try:
-            user = User.query.get_or_404(user_id)
-    
-            if request.method == 'POST':
-                # Get form data
-                username = request.form.get('username', '').strip()
-                email = request.form.get('email', '').strip()
-                role = request.form.get('role', 'user')
-                account_status = request.form.get('account_status', 'active')
-    
-                # Validate input
-                if not username:
-                    flash('Username is required.', 'error')
-                    return redirect(request.url)
-    
-                if not email:
-                    flash('Email is required.', 'error')
-                    return redirect(request.url)
-    
-                # Check for duplicate username/email
-                existing_user = User.query.filter(
-                    db.and_(
-                        db.or_(User.username == username, User.email == email),
-                        User.id != user_id
-                    )
-                ).first()
-    
-                if existing_user:
-                    if existing_user.username == username:
-                        flash('Username already exists.', 'error')
-                    else:
-                        flash('Email address already exists.', 'error')
-                    return redirect(request.url)
-    
-                # Update user
-                user.username = username
-                user.email = email
-                user.role = role
-                user.account_status = account_status
-    
-                # Handle suspension details
-                if account_status == 'suspended':
-                    suspension_reason = request.form.get('suspension_reason', '').strip()
-                    suspension_days = request.form.get('suspension_days', type=int)
-    
-                    user.suspension_reason = suspension_reason
-                    if suspension_days and suspension_days > 0:
-                        user.suspension_expires = datetime.utcnow() + timedelta(days=suspension_days)
-                    else:
-                        user.suspension_expires = None
-                else:
-                    user.suspension_reason = None
-                    user.suspension_expires = None
-    
-                db.session.commit()
-    
-                # Log the action
-                log_user_action(current_user.id, user_id, 'edit', f'Updated user details: role={role}, status={account_status}')
-    
-                flash(f'User {username} has been updated successfully.', 'success')
-                return redirect(url_for('admin_user_detail', user_id=user_id))
-    
-            return render_template('admin_edit_user.html', user=user)
-    
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Error editing user {user_id}: {e}")
-            flash('An error occurred while updating the user.', 'error')
-            return redirect(url_for('admin_users'))
-    
-    
-    @app.route('/admin/users/<int:user_id>/suspend', methods=['POST'])
-    @admin_required
-    def admin_suspend_user(user_id):
-        """Suspend a user account"""
-        try:
-            user = User.query.get_or_404(user_id)
-            reason = request.form.get('reason', '').strip()
-            days = request.form.get('days', type=int)
-    
-            user.suspend_account(reason, datetime.utcnow() + timedelta(days=days) if days else None, current_user)
-            db.session.commit()
-    
-            # Log the action
-            log_user_action(current_user.id, user_id, 'suspend', f'Suspended user account: {reason}')
-    
-            flash(f'User {user.username} has been suspended.', 'warning')
-            return redirect(url_for('admin_user_detail', user_id=user_id))
-    
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Error suspending user {user_id}: {e}")
-            flash('An error occurred while suspending the user.', 'error')
-            return redirect(url_for('admin_users'))
-    
-    
-    @app.route('/admin/users/<int:user_id>/ban', methods=['POST'])
-    @admin_required
-    def admin_ban_user(user_id):
-        """Ban a user account"""
-        try:
-            user = User.query.get_or_404(user_id)
-            reason = request.form.get('reason', '').strip()
-    
-            user.ban_account(reason, current_user)
-            db.session.commit()
-    
-            # Log the action
-            log_user_action(current_user.id, user_id, 'ban', f'Banned user account: {reason}')
-    
-            flash(f'User {user.username} has been banned.', 'danger')
-            return redirect(url_for('admin_user_detail', user_id=user_id))
-    
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Error banning user {user_id}: {e}")
-            flash('An error occurred while banning the user.', 'error')
-            return redirect(url_for('admin_users'))
-    
-    
-    @app.route('/admin/users/<int:user_id>/reactivate', methods=['POST'])
-    @admin_required
-    def admin_reactivate_user(user_id):
-        """Reactivate a suspended user account"""
-        try:
-            user = User.query.get_or_404(user_id)
-    
-            user.reactivate_account(current_user)
-            db.session.commit()
-    
-            # Log the action
-            log_user_action(current_user.id, user_id, 'reactivate', 'Reactivated user account')
-    
-            flash(f'User {user.username} has been reactivated.', 'success')
-            return redirect(url_for('admin_user_detail', user_id=user_id))
-    
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Error reactivating user {user_id}: {e}")
-            flash('An error occurred while reactivating the user.', 'error')
-            return redirect(url_for('admin_users'))
-    
-    
-    @app.route('/admin/users/<int:user_id>/reset-password', methods=['POST'])
-    @admin_required
-    def admin_reset_password(user_id):
-        """Reset user password"""
-        try:
-            user = User.query.get_or_404(user_id)
-    
-            # Generate new password
-            import secrets
-            import string
-            new_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
-    
-            # Hash and set new password
-            user.password_hash = generate_password_hash(new_password)
-            user.password_reset_token = None
-            user.password_reset_expires = None
-            db.session.commit()
-    
-            # Log the action
-            log_user_action(current_user.id, user_id, 'reset_password', 'Password reset by admin')
-    
-            flash(f'Password for {user.username} has been reset. New password: {new_password}', 'warning')
-            return redirect(url_for('admin_user_detail', user_id=user_id))
-    
-        except Exception as e:
-            db.session.rollback()
-            logger.error(f"Error resetting password for user {user_id}: {e}")
-            flash('An error occurred while resetting the password.', 'error')
-            return redirect(url_for('admin_users'))
-    
-    
-    
-    
+    try:
+        # If order is 'inventory', add items to the customer's verified inventory
+        if getattr(order, 'shipment_method', None) == 'inventory':
+            try:
+                # Resolve target user
+                target_user_id = getattr(order, 'user_id', None)
+                if not target_user_id and getattr(order, 'email', None):
+                    u = User.query.filter_by(email=order.email).first()
+                    if u:
+                        target_user_id = u.id
+                        try:
+                            order.user_id = u.id
+                        except Exception:
+                            pass
+
+                if target_user_id:
+                    # Get or create user's inventory
+                    inv = UserInventory.query.filter_by(user_id=target_user_id).first()
+                    if not inv:
+                        inv = UserInventory(user_id=target_user_id, is_public=False)
+                        db.session.add(inv)
+                        db.session.flush()
+
+                    # Copy each order item into user's inventory as verified
+                    for oi in order.items:
+                        if not oi.card_id:
+                            continue
+                        existing = InventoryItem.query.filter_by(inventory_id=inv.id, card_id=oi.card_id).first()
+                        if existing:
+                            existing.quantity += int(oi.quantity)
+                            existing.is_verified = True
+                            existing.verification_status = 'verified'
+                            existing.updated_at = db.func.now()
+                            db.session.add(existing)
+                        else:
+                            new_item = InventoryItem(
+                                inventory_id=inv.id,
+                                card_id=oi.card_id,
+                                quantity=int(oi.quantity),
+                                condition='Near Mint',
+                                verification_status='verified',
+                                is_verified=True,
+                                notes=f'Added from order {order.id}',
+                                language='English',
+                                foil_type='Non Foil',
+                                is_mint=False,
+                            )
+                            db.session.add(new_item)
+
+                    # Log the inventory grant
+                    try:
+                        UserAuditLog.create_log(
+                            user_id=target_user_id,
+                            admin_id=current_user.id,
+                            action='inventory_grant',
+                            details=f'Granted items from order {order.id} to user inventory',
+                            ip_address=request.remote_addr,
+                            user_agent=request.headers.get('User-Agent')
+                        )
+                    except Exception:
+                        pass
+            except Exception as inv_e:
+                logger.error(f"Error adding items to inventory for order {order_id}: {inv_e}")
+
+        # Mark order as confirmed
+        order.status = 'confirmed'
+        order.updated_at = db.func.now()
+        db.session.commit()
+
+        flash(f'Order {order_id} has been confirmed', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error confirming order: {str(e)}', 'error')
+        logger.error(f"Error confirming order {order_id}: {e}")
+
+    return redirect(url_for('admin_orders'))
+
+@app.route('/admin/orders/<order_id>/ship', methods=['POST'])
+@admin_required
+def admin_ship_order(order_id):
+    """Mark an order as shipped (for shipping method)."""
+    order = Order.query.get_or_404(order_id)
+
+    if order.status not in ('pending', 'confirmed'):
+        flash('Only pending or confirmed orders can be marked as shipped', 'warning')
+        return redirect(url_for('admin_orders'))
+
+    try:
+        # For shipping method, mark shipped; for pickup/inventory we still allow shipped if desired.
+        order.status = 'shipped'
+        order.updated_at = db.func.now()
+        db.session.commit()
+        flash(f'Order {order_id} marked as shipped', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error marking order shipped: {str(e)}', 'error')
+        logger.error(f"Error shipping order {order_id}: {e}")
+
+    return redirect(url_for('admin_orders'))
     @app.route('/admin/users/export')
     @admin_required
     def admin_export_users():
@@ -2931,17 +4069,17 @@ def admin_fulfill_order(order_id):
             db.session.rollback()
 
     try:
-        order.status = 'fulfilled'
+        order.status = 'confirmed'
         order.updated_at = db.func.now()
         db.session.commit()
 
-        flash(f'Order {order_id} has been fulfilled successfully', 'success')
-        logger.info(f"Order {order_id} fulfilled by admin")
+        flash(f'Order {order_id} has been confirmed successfully', 'success')
+        logger.info(f"Order {order_id} confirmed by admin")
 
     except Exception as e:
         db.session.rollback()
-        flash(f'Error fulfilling order: {str(e)}', 'error')
-        logger.error(f"Error fulfilling order {order_id}: {e}")
+        flash(f'Error confirming order: {str(e)}', 'error')
+        logger.error(f"Error confirming order {order_id}: {e}")
 
     return redirect(url_for('admin_orders'))
 
@@ -2961,6 +4099,30 @@ def admin_reject_order(order_id):
             if item.card:
                 item.card.quantity += item.quantity
                 logger.info(f"Restored {item.quantity} units of {item.card.name} (ID: {item.card.id})")
+
+        # Refund any credits redeemed against this order
+        try:
+            from models import CreditLedger, InventoryItem
+            from credit_service import _locked_user_inventory, _locked_merge_inventory_item
+            ledger_rows = CreditLedger.query.filter_by(related_order_id=order_id, kind='redeem', direction='debit').all()
+            for row in ledger_rows:
+                user_id = row.user_id
+                item_id = row.related_inventory_item_id
+                amount_vnd = int(row.amount_vnd)
+                inv = _locked_user_inventory(user_id)
+                item = InventoryItem.query.get(item_id) if item_id else None
+                if item and item.card and item.inventory_id == inv.id:
+                    denom = int(item.card.price)
+                    units = amount_vnd // denom if denom > 0 else 0
+                    if units > 0:
+                        item.quantity += units
+                        # reversal ledger
+                        from credit_service import _safe_add_ledger
+                        _safe_add_ledger(CreditLedger(user_id=user_id, amount_vnd=amount_vnd, direction='credit', kind='revoke', related_order_id=order_id, related_inventory_item_id=item.id, idempotency_key=f'refund:{order_id}:{row.id}'))
+                else:
+                    logger.warning(f"Credit refund: inventory item missing or mismatched for order {order_id} row {row.id}")
+        except Exception as re:
+            logger.error(f"Error refunding credits for order {order_id}: {re}")
 
         order.status = 'rejected'
         order.updated_at = db.func.now()
@@ -3062,7 +4224,8 @@ def admin_user_detail(user_id):
     inventory_items = []
 
     if user_inventory:
-        items = user_inventory.items
+        # Hide zero-quantity items from admin view lists and stats
+        items = [it for it in user_inventory.items if getattr(it, 'quantity', 0) > 0]
         inventory_stats['total_items'] = sum(item.quantity for item in items)
         inventory_stats['verified_items'] = sum(1 for item in items if item.is_verified)
         inventory_stats['total_value'] = sum(item.total_value for item in items)
@@ -3103,6 +4266,63 @@ def admin_user_detail(user_id):
                          inventory_items=inventory_items.get('items', []) if isinstance(inventory_items, dict) else [],
                          inventory_pagination=inventory_items if isinstance(inventory_items, dict) else {},
                          recent_orders=recent_orders)
+
+
+# ---------------------------------
+# Transfer history (user and admin)
+# ---------------------------------
+
+@app.route('/inventory/transfers')
+@login_required
+def my_transfer_history():
+    try:
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 20))
+        q = InventoryTransferLog.query.filter_by(from_user_id=current_user.id).order_by(InventoryTransferLog.created_at.desc())
+        pagination = q.paginate(page=page, per_page=per_page, error_out=False)
+        rows = [row.to_dict() for row in pagination.items]
+        return render_template('transfer_history.html',
+                               transfers=rows,
+                               pagination=pagination)
+    except Exception as e:
+        logger.error({'event': 'my_transfer_history_error', 'error': str(e)})
+        flash('Failed to load transfer history.', 'error')
+        return redirect(url_for('user_inventory'))
+
+
+@app.route('/admin/transfers')
+@admin_required
+def admin_transfer_history():
+    try:
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        search = (request.args.get('q') or '').strip()
+
+        q = InventoryTransferLog.query
+        if search:
+            # Search on usernames or numeric IDs
+            like = f"%{search}%"
+            q = (
+                q.join(User, InventoryTransferLog.from_user_id == User.id)
+                 .outerjoin(Card, InventoryTransferLog.card_id == Card.id)
+                 .filter(db.or_(
+                    User.username.ilike(like),
+                    db.cast(InventoryTransferLog.from_user_id, String).ilike(like),
+                    db.cast(InventoryTransferLog.to_user_id, String).ilike(like),
+                    Card.name.ilike(like)
+                ))
+            )
+        q = q.order_by(InventoryTransferLog.created_at.desc())
+        pagination = q.paginate(page=page, per_page=per_page, error_out=False)
+        rows = [row.to_dict() for row in pagination.items]
+        return render_template('admin_transfer_history.html',
+                               transfers=rows,
+                               pagination=pagination,
+                               search=search)
+    except Exception as e:
+        logger.error({'event': 'admin_transfer_history_error', 'error': str(e)})
+        flash('Failed to load transfer history.', 'error')
+        return redirect(url_for('admin'))
 
 
 @app.route('/admin/users/<int:user_id>/edit', methods=['GET', 'POST'])
