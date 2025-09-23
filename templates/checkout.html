@@ -53,6 +53,7 @@
                                     <strong>In-store Pickup</strong> - Collect from our store
                                 </label>
                             </div>
+                            {% if current_user.is_authenticated %}
                             <div class="form-check mt-2">
                                 <input class="form-check-input" type="radio" name="shipment_method" value="inventory"
                                        id="inventory" required>
@@ -60,6 +61,7 @@
                                     <strong>Add to My Inventory</strong> - Skip shipping, add purchased items to your verified inventory after admin approval
                                 </label>
                             </div>
+                            {% endif %}
                         </div>
 
                         <!-- Pickup Location (shown only when pickup is selected) -->
@@ -182,8 +184,8 @@
                                 <div>
                                     <label class="form-label">Mode</label>
                                     <select id="credit-mode" class="form-select form-select-sm">
-                                        <option value="auto" selected>Auto (greedy)</option>
-                                        <option value="manual">Manual (by denomination)</option>
+                                        <option value="auto" selected>Auto</option>
+                                        <option value="manual">Manual</option>
                                     </select>
                                 </div>
                                 <div class="ms-auto">

@@ -3332,7 +3332,8 @@ def add_card_form():
             description=request.form.get('description', ''),
             image_url=request.form.get('image_url', ''),
             foiling=request.form.get('foiling', 'NF'),
-            art_style=request.form.get('art_style', 'normal')
+            art_style=request.form.get('art_style', 'normal'),
+            owner='shop'
         )
         
         # Handle numeric fields with validation
@@ -3731,9 +3732,20 @@ def admin_order_detail(order_id):
     """Admin order detail page"""
     order = Order.query.get_or_404(order_id)
 
-    # Get order items with card details
+    # Get order items with card details and owner attribution
     order_items = []
     for item in order.items:
+        # Determine owner: seller username for consigned/user items, otherwise 'shop'
+        try:
+            owner_username = None
+            if getattr(item, 'seller', None) and getattr(item.seller, 'username', None):
+                owner_username = item.seller.username
+            elif getattr(item, 'inventory_item', None) and getattr(item.inventory_item, 'inventory', None) and getattr(item.inventory_item.inventory, 'user', None):
+                owner_username = getattr(item.inventory_item.inventory.user, 'username', None)
+        except Exception:
+            owner_username = None
+        owner_username = owner_username or 'shop'
+
         order_items.append({
             'card': item.card,
             'quantity': item.quantity,
@@ -3741,6 +3753,7 @@ def admin_order_detail(order_id):
             'total_price': float(item.total_price),
             'foiling': item.card.foiling if item.card else None,
             'art_style': item.card.art_style if item.card else None,
+            'owner': owner_username,
         })
 
     return render_template('admin_order_detail.html',
@@ -3822,6 +3835,7 @@ def api_list_inventory_item(item_id):
                     from_user_id=item.inventory.user_id,
                     source_inventory_item_id=item.id,
                     quantity=0,
+                    owner=(getattr(getattr(item.inventory, 'user', None), 'username', None) or None),
                 )
                 db.session.add(shop_row)
                 db.session.flush()
@@ -4098,11 +4112,38 @@ def admin_reject_order(order_id):
         return redirect(url_for('admin_orders'))
 
     try:
-        # Restore stock for all order items
-        for item in order.items:
-            if item.card:
-                item.card.quantity += item.quantity
-                logger.info(f"Restored {item.quantity} units of {item.card.name} (ID: {item.card.id})")
+        # Restore stock for all order items with correct ownership attribution
+        from models import ShopInventoryItem, InventoryItem
+        for oi in order.items:
+            try:
+                # Case 1: Order line linked to a specific user inventory item (consignment or direct-user sale)
+                if getattr(oi, 'inventory_item_id', None) and getattr(oi, 'seller_user_id', None):
+                    # Detect if it was a consigned shop allocation (there will be a shop consignment row)
+                    shop_row = ShopInventoryItem.query.filter_by(
+                        card_id=oi.card_id,
+                        from_user_id=oi.seller_user_id,
+                        source_inventory_item_id=oi.inventory_item_id,
+                    ).first()
+                    if shop_row is not None:
+                        # Consigned stock sold from shop: return quantity back to consignment and admin display stock
+                        shop_row.quantity = int(shop_row.quantity) + int(oi.quantity)
+                        if oi.card:
+                            oi.card.quantity += oi.quantity
+                            logger.info(f"Restored consigned + admin stock: {oi.quantity} of card {oi.card.id} for user {shop_row.from_user_id}")
+                    else:
+                        # Direct user inventory sale: return quantity back to the user's inventory item
+                        inv_item = InventoryItem.query.get(oi.inventory_item_id)
+                        if inv_item:
+                            inv_item.quantity = int(inv_item.quantity) + int(oi.quantity)
+                            logger.info(f"Restored user inventory item {inv_item.id} by {oi.quantity}")
+                        # Do NOT modify admin card stock for direct user sales
+                else:
+                    # Case 2: Pure admin store item (no seller attribution): restore admin card stock
+                    if oi.card:
+                        oi.card.quantity += oi.quantity
+                        logger.info(f"Restored admin stock: {oi.quantity} units of {oi.card.name} (ID: {oi.card.id})")
+            except Exception as r_e:
+                logger.error(f"Error restoring stock for order item {getattr(oi,'id',None)}: {r_e}")
 
         # Refund any credits redeemed against this order
         try:

@@ -40,7 +40,8 @@ class DatabaseStorage:
                 description=card_data.get('description', ''),
                 image_url=card_data.get('image_url', ''),
                 foiling=card_data.get('foiling', 'NF'),
-                art_style=card_data.get('art_style', 'normal')
+                art_style=card_data.get('art_style', 'normal'),
+                owner='shop'
             )
             
             db.session.add(card)
@@ -422,7 +423,8 @@ class DatabaseStorage:
                             description=row.get('description', '').strip(),
                             image_url=row.get('image_url', '').strip(),
                             foiling=row.get('foiling', 'NF').strip(),
-                            art_style=row.get('art_style', 'normal').strip()
+                            art_style=row.get('art_style', 'normal').strip(),
+                            owner='shop'
                         )
                         db.session.add(card)
                         db.session.commit()

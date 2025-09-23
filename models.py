@@ -222,6 +222,8 @@ class Card(db.Model):
     image_url: Mapped[str] = mapped_column(String(500), nullable=True)
     foiling: Mapped[str] = mapped_column(String(20), nullable=False, default='NF')
     art_style: Mapped[str] = mapped_column(String(20), nullable=False, default='normal')
+    # Owner of the catalog item: 'shop' for admin-managed stock
+    owner: Mapped[str] = mapped_column(String(80), nullable=True, default='shop')
     is_deleted: Mapped[bool] = mapped_column(db.Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -596,6 +598,8 @@ class ShopInventoryItem(db.Model):
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
+    # Denormalized owner username for quick display/exports
+    owner: Mapped[str] = mapped_column(String(80), nullable=True)
 
     # Relationships
     card = relationship('Card')
