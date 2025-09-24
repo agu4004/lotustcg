@@ -70,19 +70,23 @@
                     <h5 class="mb-0"><i class="fas fa-coins me-2"></i>Issue Store Credits</h5>
                 </div>
                 <div class="card-body">
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-3">
-                            <label class="form-label">User ID</label>
-                            <input type="number" class="form-control" id="credit-user-id" placeholder="e.g. 2">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">Denomination</label>
-                            <select id="credit-denom" class="form-select">
-                                <option value="1000">Copper Token (1,000 VND)</option>
-                                <option value="10000">Silver Token (10,000 VND)</option>
-                                <option value="100000">Gold Token (100,000 VND)</option>
+                    <div class="row g-3 align-items-end"> 
+                        <div class="col-md-4"> 
+                            <label class="form-label">User</label>
+                            <input type="text" class="form-control mb-2" id="credit-user-query" placeholder="Search username or name">
+                            <select id="credit-user-select" class="form-select">
+                                <option value="">Type to search…</option>
                             </select>
-                        </div>
+                            <input type="hidden" id="credit-user-id">
+                        </div> 
+                        <div class="col-md-2"> 
+                            <label class="form-label">Denomination</label> 
+                            <select id="credit-denom" class="form-select"> 
+                                <option value="1000">Copper Token (1,000 VND)</option> 
+                                <option value="10000">Silver Token (10,000 VND)</option> 
+                                <option value="100000">Gold Token (100,000 VND)</option> 
+                            </select> 
+                        </div> 
                         <div class="col-md-2">
                             <label class="form-label">Units</label>
                             <input type="number" class="form-control" id="credit-units" value="1" min="1">
@@ -687,13 +691,13 @@
 document.addEventListener('DOMContentLoaded', function() {
     // Issue credit
     const btnIssue = document.getElementById('issue-credit-btn');
-    if (btnIssue) {
-        const userId = document.getElementById('credit-user-id');
-        const denom = document.getElementById('credit-denom');
-        const units = document.getElementById('credit-units');
-        const idem = document.getElementById('credit-idem');
-        const msg = document.getElementById('issue-credit-msg');
-        const showMsg = (html) => { msg.innerHTML = html; msg.style.display = 'block'; };
+    if (btnIssue) { 
+        const userId = document.getElementById('credit-user-id'); 
+        const denom = document.getElementById('credit-denom'); 
+        const units = document.getElementById('credit-units'); 
+        const idem = document.getElementById('credit-idem'); 
+        const msg = document.getElementById('issue-credit-msg'); 
+        const showMsg = (html) => { msg.innerHTML = html; msg.style.display = 'block'; }; 
         btnIssue.addEventListener('click', function() {
             const payload = {
                 user_id: parseInt(userId.value, 10),
@@ -716,8 +720,49 @@ document.addEventListener('DOMContentLoaded', function() {
             }).catch(err => {
                 console.error(err); showMsg('<div class=\"alert alert-danger\">Unexpected error.</div>');
             }).finally(() => { btnIssue.disabled = false; btnIssue.innerHTML = '<i class=\"fas fa-paper-plane me-1\"></i>Issue'; });
+        }); 
+    } 
+
+    // User search for issuing credits
+    (function() {
+        const q = document.getElementById('credit-user-query');
+        const sel = document.getElementById('credit-user-select');
+        const idEl = document.getElementById('credit-user-id');
+        if (!q || !sel || !idEl) return;
+
+        let debounce;
+        const render = (results) => {
+            sel.innerHTML = '';
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = results.length ? 'Select a user…' : 'No results';
+            sel.appendChild(placeholder);
+            results.forEach(u => {
+                const opt = document.createElement('option');
+                opt.value = String(u.id);
+                opt.textContent = u.full_name ? `${u.username} — ${u.full_name}` : u.username;
+                sel.appendChild(opt);
+            });
+        };
+
+        const search = (term) => {
+            const t = (term || '').trim();
+            if (!t) { render([]); idEl.value = ''; return; }
+            fetch(`/api/users/search?q=${encodeURIComponent(t)}&limit=12`)
+                .then(r => r.json())
+                .then(data => render((data && data.results) || []))
+                .catch(() => render([]));
+        };
+
+        q.addEventListener('input', function() {
+            clearTimeout(debounce);
+            debounce = setTimeout(() => search(q.value), 250);
         });
-    }
+
+        sel.addEventListener('change', function() {
+            idEl.value = sel.value || '';
+        });
+    })();
     // File upload validation
     const fileInput = document.getElementById('csv_file');
     if (fileInput) {

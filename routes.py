@@ -176,13 +176,18 @@ def _log_event(event: str, **fields):
 
 @app.route('/admin/credit/issue', methods=['POST'])
 @login_required
-def admin_credit_issue():
-    if not current_user.is_admin():
-        return _json_error('FORBIDDEN', 'Admin privileges required', 403)
-    if not request.is_json:
-        return _json_error('INVALID_JSON', 'Request must be JSON', 400)
-    data = request.get_json(silent=True) or {}
-    idem = _get_idem_key()
+def admin_credit_issue(): 
+    if not current_user.is_admin(): 
+        return _json_error('FORBIDDEN', 'Admin privileges required', 403) 
+    if not request.is_json: 
+        return _json_error('INVALID_JSON', 'Request must be JSON', 400) 
+    data = request.get_json(silent=True) or {} 
+    # Best-effort: ensure credit tables exist (idempotent)
+    try:
+        db.create_all()
+    except Exception:
+        pass
+    idem = _get_idem_key() 
     try:
         user_id = int(data.get('user_id'))
         denom = int(data.get('denomination_vnd') or data.get('amount_vnd'))

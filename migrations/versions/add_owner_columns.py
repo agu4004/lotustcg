@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'add_owner_columns'
-down_revision = 'create_shop_consignment_logs'
+down_revision = '487dc01e2a2d'
 branch_labels = None
 depends_on = None
 
@@ -58,4 +58,3 @@ def downgrade():
         op.drop_column('cards', 'owner')
     except Exception:
         pass
-
