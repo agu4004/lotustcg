@@ -132,13 +132,10 @@ def _locked_user_inventory(user_id: int) -> UserInventory:
 
 def _locked_merge_inventory_item(user_id: int, card_id: int) -> InventoryItem:
     inv = _locked_user_inventory(user_id)
-    # Lock only the inventory_items row. Avoid joinedload here because it emits
-    # a LEFT OUTER JOIN to cards; PostgreSQL forbids FOR UPDATE on the nullable
-    # side of an outer join. We can lazy-load the card after locking.
     item = (
-        InventoryItem.query
+        InventoryItem.query.options(joinedload(InventoryItem.card))
         .filter_by(inventory_id=inv.id, card_id=card_id)
-        .with_for_update(of=InventoryItem)
+        .with_for_update()
         .first()
     )
     if item:
