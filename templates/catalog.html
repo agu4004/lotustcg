@@ -243,6 +243,9 @@
                             </div>
                             <div class="small">
                                 <p class="mb-1"><strong>Set:</strong> {{ card.set_name }}</p>
+                                {% if card.card_code %}
+                                <p class="mb-1"><strong>Code:</strong> {{ card.card_code }}</p>
+                                {% endif %}
                                 <p class="mb-1"><strong>Condition:</strong> {{ card.condition }}</p>
                                 <p class="mb-1"><strong>Foiling:</strong>
                                     {% if card.foiling == 'NF' %}

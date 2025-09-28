@@ -179,6 +179,9 @@
                                                     {% endif %}
                                                     <div>
                                                         <strong>{{ item.card.name }}</strong><br>
+                                                        {% if item.card.card_code %}
+                                                        <small class="text-muted">Code: {{ item.card.card_code }}</small><br>
+                                                        {% endif %}
                                                         <small class="text-muted">{{ item.card.set_name }} • {{ item.card.condition }} • {{ item.foiling or (item.card.foiling if item.card else 'N/A') }} • {{ item.art_style or (item.card.art_style if item.card else 'N/A') }}</small><br>
                                                         
                                                     </div>

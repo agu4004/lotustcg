@@ -58,6 +58,12 @@
                         <div class="col-sm-4"><strong>Set:</strong></div>
                         <div class="col-sm-8">{{ card.set_name }}</div>
                     </div>
+                    {% if card.card_code %}
+                    <div class="row mb-3">
+                        <div class="col-sm-4"><strong>Card Code:</strong></div>
+                        <div class="col-sm-8">{{ card.card_code }}</div>
+                    </div>
+                    {% endif %}
                     
                     <div class="row mb-3">
                         <div class="col-sm-4"><strong>Rarity:</strong></div>

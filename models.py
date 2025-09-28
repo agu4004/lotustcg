@@ -220,6 +220,8 @@ class Card(db.Model):
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     description: Mapped[str] = mapped_column(Text, nullable=True)
     image_url: Mapped[str] = mapped_column(String(500), nullable=True)
+    # Optional external/system card identifier (e.g., TCG code)
+    card_code: Mapped[str] = mapped_column(String(80), nullable=True)
     foiling: Mapped[str] = mapped_column(String(20), nullable=False, default='NF')
     art_style: Mapped[str] = mapped_column(String(20), nullable=False, default='normal')
     # Owner of the catalog item: 'shop' for admin-managed stock
@@ -248,6 +250,7 @@ class Card(db.Model):
             'quantity': self.quantity,
             'description': self.description or '',
             'image_url': self.image_url or '',
+            'card_code': self.card_code or '',
             'foiling': self.foiling,
             'art_style': self.art_style,
             'is_deleted': self.is_deleted,

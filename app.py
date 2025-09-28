@@ -99,6 +99,14 @@ with app.app_context():
         _apply_owner_cols([_db_path] if _db_path else None)
     except Exception:
         pass
+    # Best-effort: ensure new card_code column exists when Alembic isn't run
+    try:
+        from apply_card_code_column import apply_card_code_column as _apply_card_code
+        _db_path = getattr(getattr(db, 'engine', None), 'url', None)
+        _db_path = getattr(_db_path, 'database', None)
+        _apply_card_code([_db_path] if _db_path else None)
+    except Exception:
+        pass
     # Initialize default users if they don't exist
     from models import initialize_default_users
     initialize_default_users()

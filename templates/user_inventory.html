@@ -138,6 +138,7 @@
                                     <th width="60" class="text-center">Image</th>
                                     <th width="200">Card Name</th>
                                     <th width="100">Set</th>
+                                    <th width="90">Code</th>
                                     <th width="80" class="text-center">Rarity</th>
                                     <th width="80">Condition</th>
                                     <th width="70" class="text-center">Quantity</th>
@@ -163,6 +164,7 @@
                                         <div class="fw-bold">{{ item.card_name }}</div>
                                     </td>
                                     <td class="align-middle">{{ item.card_set }}</td>
+                                    <td class="align-middle">{{ item.card_code or '-' }}</td>
                                     <td class="align-middle text-center">
                                         {% set rarity_l = (item.card_rarity or '') | lower %}
                                         {% if rarity_l == 'majestic' %}

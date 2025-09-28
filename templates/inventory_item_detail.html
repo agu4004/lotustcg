@@ -87,6 +87,12 @@
                                             <td class="fw-bold">Set:</td>
                                             <td>{{ item.card_set }}</td>
                                         </tr>
+                                        {% if card.card_code %}
+                                        <tr>
+                                            <td class="fw-bold">Card Code:</td>
+                                            <td>{{ card.card_code }}</td>
+                                        </tr>
+                                        {% endif %}
                                         <tr>
                                             <td class="fw-bold">Rarity:</td>
                                             <td>{{ item.card_rarity }}</td>

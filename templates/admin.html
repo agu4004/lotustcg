@@ -63,6 +63,26 @@
                     </form>
                 </div>
             </div>
+
+            <!-- Price Update CSV -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-dollar-sign me-2"></i>Bulk Update Prices via CSV</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin_update_prices_csv') }}" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="price_csv_file" class="form-label">Choose CSV File</label>
+                            <input type="file" class="form-control" id="price_csv_file" name="csv_file" accept=".csv" required>
+                            <div class="form-text">
+                                Columns: <code>name</code>, <code>foiling</code>, <code>Rarity</code>, <code>code</code>, <code>price</code>. Uses <strong>code</strong> instead of set to match.
+                                <a href="{{ url_for('admin_sample_price_csv') }}">Download sample</a>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-warning"><i class="fas fa-sync-alt me-2"></i>Update Prices</button>
+                    </form>
+                </div>
+            </div>
             
             <!-- Issue Store Credits -->
             <div class="card mb-4">
@@ -183,6 +203,12 @@
                                     <td>Card art style</td>
                                     <td>Normal, EA, WB, ALT, GF, Marvel</td>
                                 </tr>
+                                <tr>
+                                    <td><code>card_code</code></td>
+                                    <td><span class="badge bg-warning">No</span></td>
+                                    <td>Optional external code/identifier for the card</td>
+                                    <td>BL-ALPHA-000</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -296,6 +322,7 @@
                                         <tr>
                                             <th width="50">Image</th>
                                             <th width="150">Name</th>
+                                            <th width="90">Code</th>
                                             <th width="80">Set</th>
                                             <th width="70">Rarity</th>
                                             <th width="80">Condition</th>
@@ -421,6 +448,9 @@
                                                         </div>
                                                     </form>
                                                 </div>
+                                            </td>
+                                            <td>
+                                                <div id="code-display-{{ card.id }}" style="font-size: 12px;">{{ card.card_code or '-' }}</div>
                                             </td>
                                             <td>
                                                 <div id="set-display-{{ card.id }}" style="font-size: 12px;">{{ card.set_name }}</div>

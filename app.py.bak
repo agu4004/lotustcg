@@ -91,6 +91,14 @@ def load_user(user_id):
 # Create tables and seed data
 with app.app_context():
     db.create_all()
+    # Best-effort: ensure new owner columns exist in SQLite when Alembic isn't run
+    try:
+        from apply_owner_columns import apply_owner_columns as _apply_owner_cols
+        _db_path = getattr(getattr(db, 'engine', None), 'url', None)
+        _db_path = getattr(_db_path, 'database', None)
+        _apply_owner_cols([_db_path] if _db_path else None)
+    except Exception:
+        pass
     # Initialize default users if they don't exist
     from models import initialize_default_users
     initialize_default_users()

@@ -140,7 +140,7 @@
                     <h6><i class="fas fa-info-circle me-2"></i>CSV Format Guidelines</h6>
                     <ul class="mb-0 small">
                         <li><strong>Required columns:</strong> name, quantity</li>
-                        <li><strong>Optional columns:</strong> set_name, rarity, condition, sale_price, market_price, is_for_sale, language, notes, grade, foil_type, description, image_url</li>
+                        <li><strong>Optional columns:</strong> set_name, rarity, condition, sale_price, market_price, is_for_sale, language, notes, grade, foil_type, description, image_url, card_code</li>
                         <li><strong>Data types:</strong> quantity (integer), sale_price/market_price (decimal), is_for_sale (true/false)</li>
                         <li><strong>Encoding:</strong> UTF-8 recommended</li>
                         <li><strong>Max file size:</strong> 10MB</li>
@@ -370,6 +370,9 @@
 
                                 <div class="small">
                                     <p class="mb-1"><strong>Set:</strong> {{ item.card_set }}</p>
+                                    {% if item.card_code %}
+                                    <p class="mb-1"><strong>Card Code:</strong> <span class="text-muted">{{ item.card_code }}</span></p>
+                                    {% endif %}
                                     <p class="mb-1"><strong>Condition:</strong>
                                         <span class="badge bg-secondary">{{ item.condition }}</span>
                                     </p>

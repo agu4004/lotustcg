@@ -148,6 +148,7 @@
                                             <th width="50">Image</th>
                                             <th width="200">Card Name</th>
                                             <th width="80">Set</th>
+                                            <th width="90">Code</th>
                                             <th width="70">Rarity</th>
                                             <th width="80">Condition</th>
                                             <th width="60">Qty</th>
@@ -182,6 +183,9 @@
                                             </td>
                                             <td>
                                                 <small class="text-muted">{{ item.card_set or 'Unknown' }}</small>
+                                            </td>
+                                            <td>
+                                                <small class="text-muted">{{ item.card.card_code or '-' }}</small>
                                             </td>
                                             <td>
                                                 {% if item.card_rarity %}

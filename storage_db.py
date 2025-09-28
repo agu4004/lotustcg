@@ -5,7 +5,7 @@ import csv
 import io
 import logging
 from typing import List, Optional, Dict, Any
-from sqlalchemy import or_, and_
+from sqlalchemy import or_, and_, func
 from app import db
 # storage_db.py (thêm ở đầu file)
 import re
@@ -39,6 +39,7 @@ class DatabaseStorage:
                 quantity=int(card_data.get('quantity', 0)),
                 description=card_data.get('description', ''),
                 image_url=card_data.get('image_url', ''),
+                card_code=(card_data.get('card_code') or None),
                 foiling=card_data.get('foiling', 'NF'),
                 art_style=card_data.get('art_style', 'normal'),
                 owner='shop'
@@ -205,6 +206,13 @@ class DatabaseStorage:
                         card.image_url = card_data['image_url']
                         logger.debug(f"Updated image_url for {card.name}")
 
+                    # Update card_code if provided
+                    if 'card_code' in card_data:
+                        incoming_code = (card_data.get('card_code') or '').strip()
+                        if incoming_code and incoming_code != (card.card_code or ''):
+                            card.card_code = incoming_code
+                            logger.debug(f"Updated card_code for {card.name} -> {incoming_code}")
+
                 db.session.commit()
                 logger.debug(f"Updated card: {card.name} (ID: {card.id}) - Added {additional_quantity}, Total: {card.quantity}")
                 return True
@@ -288,6 +296,7 @@ class DatabaseStorage:
                         'quantity': quantity,
                         'description': row.get('description', '').strip(),
                         'image_url': image_url or '',
+                        'card_code': (row.get('card_code') or row.get('code') or '').strip(),
                         'foiling': row.get('foiling', 'NF').strip(),
                         'art_style': row.get('art_style', 'normal').strip()
                     }
@@ -410,8 +419,13 @@ class DatabaseStorage:
                         results['errors'].append(f'Row {row_num}: credit tokens cannot be imported into personal inventory')
                         continue
 
-                    # Check if card exists, if not create it
-                    card = Card.query.filter_by(name=name).first()
+                    # Check if card exists, if not create it (prefer match by card_code if provided)
+                    incoming_code = (row.get('card_code') or row.get('code') or '').strip()
+                    card = None
+                    if incoming_code:
+                        card = Card.query.filter_by(card_code=incoming_code).first()
+                    if not card:
+                        card = Card.query.filter_by(name=name).first()
                     if not card:
                         card = Card(
                             name=name,
@@ -422,6 +436,7 @@ class DatabaseStorage:
                             quantity=0,  # User inventory doesn't affect admin stock
                             description=row.get('description', '').strip(),
                             image_url=row.get('image_url', '').strip(),
+                            card_code=incoming_code or None,
                             foiling=row.get('foiling', 'NF').strip(),
                             art_style=row.get('art_style', 'normal').strip(),
                             owner='shop'
@@ -434,6 +449,12 @@ class DatabaseStorage:
                         if str(card.set_name).upper() == 'CREDIT':
                             results['errors'].append(f'Row {row_num}: credit tokens cannot be imported into personal inventory')
                             continue
+                        # If new code provided and current card lacks it, set it
+                        if incoming_code and not (card.card_code or '').strip():
+                            try:
+                                card.card_code = incoming_code
+                            except Exception:
+                                pass
                         # Update existing card's price to match market price
                         if float(card.price) != market_price:
                             old_price = card.price
@@ -500,6 +521,130 @@ class DatabaseStorage:
 
         return results
 
+
+    def update_prices_from_csv(self, csv_content: str) -> Dict[str, Any]:
+        """
+        Update admin inventory prices from a CSV with columns:
+        name, foiling, Rarity, set, price.
+
+        - Matches on exact values of name, foiling, rarity (from Rarity), set_name (from set)
+        - Updates Card.price to the provided price
+
+        Returns dict: {total, updated, not_found, errors: [..]}
+        """
+        from models import Card
+        results = {"total": 0, "updated": 0, "not_found": 0, "errors": []}
+
+        if not csv_content or not csv_content.strip():
+            results["errors"].append("Empty CSV content")
+            return results
+
+        try:
+            csv_file = io.StringIO(csv_content)
+            reader = csv.DictReader(csv_file)
+
+            # Validate headers exist in some form
+            if not reader.fieldnames:
+                results["errors"].append("CSV must have headers")
+                return results
+
+            # Build a case-insensitive header map
+            headers = {(_norm_header(h) if h is not None else ''): h for h in reader.fieldnames}
+
+            def _get(row, key_variants):
+                for k in key_variants:
+                    canon = _norm_header(k)
+                    if canon in headers:
+                        return (row.get(headers[canon]) or "").strip()
+                return ""
+
+            row_num = 1
+            updates = 0
+
+            for row in reader:
+                row_num += 1
+                results["total"] += 1
+
+                try:
+                    name = _get(row, ["name"]).strip()
+                    foiling_in = _get(row, ["foiling"]).strip()
+                    rarity = _get(row, ["Rarity", "rarity"]).strip()
+                    code = _get(row, ["code", "card_code", "Code"]).strip()
+                    price_raw = _get(row, ["price"]).strip()
+
+                    if not code or not price_raw:
+                        results["errors"].append(
+                            f"Row {row_num}: missing required fields (need code and price)"
+                        )
+                        continue
+
+                    # Parse price (tolerate commas)
+                    try:
+                        price_val = float(str(price_raw).replace(",", "").replace("$", "").strip())
+                    except Exception:
+                        results["errors"].append(f"Row {row_num}: invalid price '{price_raw}'")
+                        continue
+
+                    # Normalize foiling input
+                    def _norm_foiling(v: str) -> str:
+                        m = (v or '').strip().lower()
+                        if m in ('nf', 'non foil', 'non-foil', 'nonfoil'):
+                            return 'NF'
+                        if m in ('rf', 'rainbow foil', 'rainbow-foil', 'rainbowfoil'):
+                            return 'RF'
+                        if m in ('cf', 'cold foil', 'cold-foil', 'coldfoil'):
+                            return 'CF'
+                        return (v or '').strip()
+
+                    norm_foil = _norm_foiling(foiling_in)
+
+                    # Prefer matching by code only
+                    matched = (Card.query
+                               .filter(Card.is_deleted == False)
+                               .filter(func.lower(Card.card_code) == code.lower())
+                               .all())
+
+                    # Fallback: try by attributes if code not found or not set
+                    if not matched:
+                        q = Card.query.filter(Card.is_deleted == False)
+                        if name:
+                            q = q.filter(func.lower(Card.name) == name.lower())
+                        if norm_foil:
+                            q = q.filter(Card.foiling == norm_foil)
+                        if rarity:
+                            q = q.filter(func.lower(Card.rarity) == rarity.lower())
+                        set_name = _get(row, ["set", "set_name"]).strip()
+                        if set_name:
+                            q = q.filter(func.lower(Card.set_name) == set_name.lower())
+                        matched = q.all()
+                    if not matched:
+                        results["not_found"] += 1
+                        continue
+
+                    # Update all matches (in case same card exists with different condition/art_style)
+                    for card in matched:
+                        try:
+                            if float(card.price) != float(price_val):
+                                card.price = float(price_val)
+                        except Exception:
+                            card.price = float(price_val)
+
+                    updates += 1
+                except Exception as e:
+                    results["errors"].append(f"Row {row_num}: {str(e)}")
+
+            # Commit once after processing
+            try:
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                results["errors"].append(f"Database commit failed: {str(e)}")
+
+            results["updated"] = updates
+            return results
+        except Exception as e:
+            results["errors"].append(f"CSV parsing error: {str(e)}")
+            return results
 
 # Global storage instance
 storage = DatabaseStorage()

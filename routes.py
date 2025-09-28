@@ -466,8 +466,8 @@ def catalog():
     in_stock_cards = [card for card in all_cards if card.get('quantity', 0) > 0]
     out_of_stock_cards = [card for card in all_cards if card.get('quantity', 0) == 0]
 
-    # Combine with in-stock cards first, then out-of-stock cards
-    sorted_cards = in_stock_cards + out_of_stock_cards
+    # Hide out-of-stock items from the catalog listing
+    sorted_cards = in_stock_cards
 
     # Calculate pagination
     total_cards = len(sorted_cards)
@@ -1579,6 +1579,7 @@ def user_inventory():
                     'id': item.id,
                     'card_name': item.card.name if item.card else 'Unknown Card',
                     'card_set': item.card.set_name if item.card else 'Unknown',
+                    'card_code': getattr(item.card, 'card_code', '') if item.card else '',
                     'quantity': item.quantity,
                     'condition': item.condition,
                     'is_verified': item.is_verified,
@@ -1748,6 +1749,7 @@ def view_user_inventory(user_id):
                         'id': item.id,
                         'card_name': item.card.name if item.card else 'Unknown Card',
                         'card_set': item.card.set_name if item.card else 'Unknown',
+                        'card_code': getattr(item.card, 'card_code', '') if item.card else '',
                         'quantity': item.quantity,
                         'condition': item.condition,
                         'verification_status': item.verification_status,
@@ -2537,6 +2539,55 @@ def upload_csv():
     
     return redirect(url_for('admin'))
 
+@app.route('/admin/update_prices_csv', methods=['POST'])
+@admin_required
+def admin_update_prices_csv():
+    """Upload a CSV to bulk update prices by matching name, foiling, Rarity, set."""
+    if 'csv_file' not in request.files:
+        flash('No file selected', 'error')
+        return redirect(url_for('admin'))
+
+    file = request.files['csv_file']
+    if not file or file.filename == '':
+        flash('No file selected', 'error')
+        return redirect(url_for('admin'))
+
+    if not file.filename.lower().endswith('.csv'):
+        flash('Please upload a CSV file', 'error')
+        return redirect(url_for('admin'))
+
+    try:
+        csv_content = file.read().decode('utf-8-sig')  # handle BOM if present
+        results = storage.update_prices_from_csv(csv_content)
+
+        msg = f"Processed {results.get('total', 0)} rows: updated {results.get('updated', 0)}, not found {results.get('not_found', 0)}"
+        flash(msg, 'success' if results.get('updated', 0) > 0 else 'info')
+
+        errs = results.get('errors') or []
+        for e in errs[:10]:
+            flash(e, 'error')
+        if len(errs) > 10:
+            flash(f"... and {len(errs) - 10} more errors", 'error')
+    except UnicodeDecodeError:
+        flash('Invalid file encoding. Please use UTF-8.', 'error')
+    except Exception as e:
+        logger.error(f"Price CSV upload error: {e}")
+        flash(f"Error processing file: {str(e)}", 'error')
+
+    return redirect(url_for('admin'))
+
+@app.route('/admin/sample_price_csv')
+@admin_required
+def admin_sample_price_csv():
+    """Provide a sample CSV template for price updates."""
+    from flask import Response
+    sample = (
+        "name,foiling,Rarity,code,price\n"
+        "Black Lotus,NF,Legendary,BL-ALPHA-000,5000.00\n"
+        "Counterspell,RF,Common,CS-BETA-010,25.00\n"
+    )
+    return Response(sample, mimetype='text/csv', headers={'Content-Disposition': 'attachment; filename=price_update_template.csv'})
+
 @app.route('/admin/clear_cards', methods=['POST'])
 @admin_required
 def clear_cards():
@@ -2608,10 +2659,10 @@ def download_sample_csv():
     """Download sample CSV template"""
     from flask import Response
     
-    sample_csv = """name,set_name,rarity,condition,price,quantity,description,image_url,foiling,art_style
-"Lightning Bolt","Core Set","Common","Near Mint",1.50,10,"Classic red instant spell","https://example.com/lightning-bolt.jpg","NF","normal"
-"Black Lotus","Alpha","Legendary","Light Play",5000.00,1,"The most powerful mox","https://example.com/black-lotus.jpg","NF","normal"
-"Counterspell","Beta","Common","Near Mint",25.00,5,"Counter target spell","https://example.com/counterspell.jpg","RF","EA"
+    sample_csv = """name,set_name,rarity,condition,price,quantity,description,image_url,foiling,art_style,card_code
+"Lightning Bolt","Core Set","Common","Near Mint",1.50,10,"Classic red instant spell","https://example.com/lightning-bolt.jpg","NF","normal","LB-CORE-001"
+"Black Lotus","Alpha","Legendary","Light Play",5000.00,1,"The most powerful mox","https://example.com/black-lotus.jpg","NF","normal","BL-ALPHA-000"
+"Counterspell","Beta","Common","Near Mint",25.00,5,"Counter target spell","https://example.com/counterspell.jpg","RF","EA","CS-BETA-010"
 """
     
     return Response(
@@ -2635,8 +2686,8 @@ def download_inventory_csv():
     output = io.StringIO()
     writer = csv.writer(output)
 
-    # Write header (same format as sample CSV)
-    writer.writerow(['name', 'set_name', 'rarity', 'condition', 'price', 'quantity', 'description', 'image_url', 'foiling', 'art_style'])
+    # Write header (same format as sample CSV, plus card_code)
+    writer.writerow(['name', 'set_name', 'rarity', 'condition', 'price', 'quantity', 'description', 'image_url', 'foiling', 'art_style', 'card_code'])
 
     # Write card data
     for card in cards:
@@ -2650,7 +2701,8 @@ def download_inventory_csv():
             card['description'],
             card['image_url'],
             card['foiling'],
-            card['art_style']
+            card['art_style'],
+            card.get('card_code', '')
         ])
 
     csv_content = output.getvalue()
@@ -2749,7 +2801,7 @@ def download_user_inventory_csv():
         writer.writerow([
             'name', 'set_name', 'rarity', 'condition', 'quantity',
             'market_price', 'language', 'notes', 'grade', 'foil_type',
-            'description', 'image_url'
+            'description', 'image_url', 'card_code'
         ])
 
         # Write item data
@@ -2766,7 +2818,8 @@ def download_user_inventory_csv():
                 item.grade or '',
                 item.foil_type or '',
                 item.card.description if item.card else '',
-                item.card.image_url if item.card else ''
+                item.card.image_url if item.card else '',
+                (item.card.card_code if item.card and getattr(item.card, 'card_code', None) else '')
             ])
 
         csv_content = output.getvalue()
@@ -2793,10 +2846,10 @@ def download_user_inventory_template_csv():
     """Download CSV template for user inventory import"""
     from flask import Response
 
-    sample_csv = """name,set_name,rarity,condition,quantity,market_price,language,notes,grade,foil_type,description,image_url
-"Lightning Bolt","Core Set","Common","Near Mint",10,1200,English,"Classic instant spell","PSA 10","Non Foil","A classic red instant spell","https://example.com/lightning-bolt.jpg"
-"Black Lotus","Alpha","Legendary","Light Play",1,4500000,Not English,"The most powerful mox","BGS 9.5","Cold Foil","Most powerful card ever","https://example.com/black-lotus.jpg"
-"Counterspell","Beta","Common","Near Mint",5,20000,English,"Counter target spell","","Normal","Blue counterspell","https://example.com/counterspell.jpg"
+    sample_csv = """name,set_name,rarity,condition,quantity,market_price,language,notes,grade,foil_type,description,image_url,card_code
+"Lightning Bolt","Core Set","Common","Near Mint",10,1200,English,"Classic instant spell","PSA 10","Non Foil","A classic red instant spell","https://example.com/lightning-bolt.jpg","LB-CORE-001"
+"Black Lotus","Alpha","Legendary","Light Play",1,4500000,Not English,"The most powerful mox","BGS 9.5","Cold Foil","Most powerful card ever","https://example.com/black-lotus.jpg","BL-ALPHA-000"
+"Counterspell","Beta","Common","Near Mint",5,20000,English,"Counter target spell","","Normal","Blue counterspell","https://example.com/counterspell.jpg","CS-BETA-010"
 """
 
     return Response(
@@ -4117,6 +4170,7 @@ def admin_reject_order(order_id):
         return redirect(url_for('admin_orders'))
 
     try:
+        had_error = False
         # Restore stock for all order items with correct ownership attribution
         from models import ShopInventoryItem, InventoryItem
         for oi in order.items:
@@ -4149,6 +4203,12 @@ def admin_reject_order(order_id):
                         logger.info(f"Restored admin stock: {oi.quantity} units of {oi.card.name} (ID: {oi.card.id})")
             except Exception as r_e:
                 logger.error(f"Error restoring stock for order item {getattr(oi,'id',None)}: {r_e}")
+                # Roll back to clear failed state and flag error
+                try:
+                    db.session.rollback()
+                except Exception:
+                    pass
+                had_error = True
 
         # Refund any credits redeemed against this order
         try:
@@ -4173,6 +4233,14 @@ def admin_reject_order(order_id):
                     logger.warning(f"Credit refund: inventory item missing or mismatched for order {order_id} row {row.id}")
         except Exception as re:
             logger.error(f"Error refunding credits for order {order_id}: {re}")
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            had_error = True
+
+        if had_error:
+            raise RuntimeError("One or more stock/credit refund operations failed; rejection aborted")
 
         order.status = 'rejected'
         order.updated_at = db.func.now()
