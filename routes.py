@@ -813,7 +813,8 @@ def checkout():
                     if credit_after_pct is None or abs(int(credit_after_pct) - expected_base) <= 1:
                         # Redeem now, atomically, using breakdown
                         idem_key = f"order:{order_id}"
-                        res = svc_apply_credits(current_user.id, expected_base, mode='manual', breakdown=credit_breakdown, idempotency_key=idem_key, related_order_id=order_id, preview=False)
+                        # Do not pass related_order_id (ledger column is integer in DB, order id is string)
+                        res = svc_apply_credits(current_user.id, expected_base, mode='manual', breakdown=credit_breakdown, idempotency_key=idem_key, related_order_id=None, preview=False)
                         final_total = float(res.get('remaining_vnd'))
                         logger.info(f"Credits redeemed at order placement: applied={res.get('credits_applied_vnd')}, remaining={final_total}")
                     else:
@@ -4214,7 +4215,14 @@ def admin_reject_order(order_id):
         try:
             from models import CreditLedger, InventoryItem
             from credit_service import _locked_user_inventory, _locked_merge_inventory_item
-            ledger_rows = CreditLedger.query.filter_by(related_order_id=order_id, kind='redeem', direction='debit').all()
+            # Match redemption ledger rows using idempotency key pattern used at placement
+            # Rows created with idempotency_key = f"order:{order_id}:{card_id}"
+            like_pat = f"order:{order_id}%"
+            ledger_rows = (CreditLedger.query
+                           .filter(CreditLedger.kind == 'redeem')
+                           .filter(CreditLedger.direction == 'debit')
+                           .filter(CreditLedger.idempotency_key.ilike(like_pat))
+                           .all())
             for row in ledger_rows:
                 user_id = row.user_id
                 item_id = row.related_inventory_item_id
@@ -4228,7 +4236,7 @@ def admin_reject_order(order_id):
                         item.quantity += units
                         # reversal ledger
                         from credit_service import _safe_add_ledger
-                        _safe_add_ledger(CreditLedger(user_id=user_id, amount_vnd=amount_vnd, direction='credit', kind='revoke', related_order_id=order_id, related_inventory_item_id=item.id, idempotency_key=f'refund:{order_id}:{row.id}'))
+                        _safe_add_ledger(CreditLedger(user_id=user_id, amount_vnd=amount_vnd, direction='credit', kind='revoke', related_inventory_item_id=item.id, idempotency_key=f'refund:{order_id}:{row.id}'))
                 else:
                     logger.warning(f"Credit refund: inventory item missing or mismatched for order {order_id} row {row.id}")
         except Exception as re:
