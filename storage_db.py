@@ -30,11 +30,20 @@ class DatabaseStorage:
         
         try:
             # Create new card instance
+            card_class_value = card_data.get('card_class')
+            if card_class_value is not None:
+                try:
+                    card_class_value = str(card_class_value).strip() or 'General'
+                except Exception:
+                    card_class_value = 'General'
+            else:
+                card_class_value = 'General'
             card = Card(
                 name=card_data.get('name', 'Unknown Card'),
                 set_name=card_data.get('set_name', 'Unknown'),
                 rarity=card_data.get('rarity', 'Common'),
                 condition=card_data.get('condition', 'Near Mint'),
+                language=card_data.get('language', 'English'),
                 price=float(card_data.get('price', 0.0)),
                 quantity=int(card_data.get('quantity', 0)),
                 description=card_data.get('description', ''),
@@ -42,6 +51,7 @@ class DatabaseStorage:
                 card_code=(card_data.get('card_code') or None),
                 foiling=card_data.get('foiling', 'NF'),
                 art_style=card_data.get('art_style', 'normal'),
+                card_class=card_class_value,
                 owner='shop'
             )
             
@@ -72,7 +82,8 @@ class DatabaseStorage:
         return [card.to_dict() for card in cards]
     
     def search_cards(self, query: str = "", set_filter: str = "", rarity_filter: str = "",
-                    foiling_filter: str = "", min_price: Optional[float] = None, max_price: Optional[float] = None) -> List[Dict[str, Any]]:
+                    foiling_filter: str = "", card_class_filter: str = "",
+                    min_price: Optional[float] = None, max_price: Optional[float] = None) -> List[Dict[str, Any]]:
         """Search cards with filters"""
         from models import Card
         # Start with base query
@@ -96,6 +107,9 @@ class DatabaseStorage:
         # Foiling filter
         if foiling_filter:
             filters.append(Card.foiling == foiling_filter)
+
+        if card_class_filter:
+            filters.append(Card.card_class == card_class_filter)
 
         # Price range filters
         if min_price is not None:
@@ -131,6 +145,17 @@ class DatabaseStorage:
         result = db.session.query(Card.foiling).filter(Card.is_deleted == False).distinct().all()
         return [row[0] for row in result if row[0]]
     
+    def get_unique_classes(self) -> List[str]:
+        """Get unique classes from non-deleted cards"""
+        from models import Card
+        result = db.session.query(Card.card_class).filter(Card.is_deleted == False).distinct().all()
+        classes: List[str] = []
+        for row in result:
+            value = row[0] or 'General'
+            if value not in classes:
+                classes.append(value)
+        return classes
+
     def update_card_quantity(self, card_id: str, new_quantity: int) -> bool:
         """Update card quantity"""
         from models import Card
@@ -213,6 +238,26 @@ class DatabaseStorage:
                             card.card_code = incoming_code
                             logger.debug(f"Updated card_code for {card.name} -> {incoming_code}")
 
+                    # Update class if provided
+                    try:
+                        incoming_class = card_data.get('card_class')
+                        if incoming_class is not None:
+                            normalized_class = str(incoming_class).strip() or 'General'
+                            if normalized_class != (card.card_class or 'General'):
+                                card.card_class = normalized_class
+                                logger.debug(f"Updated class for {card.name} -> {normalized_class}")
+                    except Exception:
+                        pass
+
+                    # Update language if provided
+                    try:
+                        incoming_lang = (card_data.get('language') or '').strip()
+                        if incoming_lang and incoming_lang != (card.language or ''):
+                            card.language = incoming_lang
+                            logger.debug(f"Updated language for {card.name} -> {incoming_lang}")
+                    except Exception:
+                        pass
+
                 db.session.commit()
                 logger.debug(f"Updated card: {card.name} (ID: {card.id}) - Added {additional_quantity}, Total: {card.quantity}")
                 return True
@@ -287,11 +332,20 @@ class DatabaseStorage:
                             break
 
                     # Create card data
+                    raw_class = row.get('class') or row.get('card_class')
+                    card_class_value = 'General'
+                    if raw_class is not None:
+                        try:
+                            card_class_value = str(raw_class).strip() or 'General'
+                        except Exception:
+                            card_class_value = 'General'
                     card_data = {
                         'name': name,
                         'set_name': row.get('set_name', 'Unknown').strip(),
+                        'card_class': card_class_value,
                         'rarity': row.get('rarity', 'Common').strip(),
                         'condition': row.get('condition', 'Near Mint').strip(),
+                        'language': (row.get('language') or 'English').strip() or 'English',
                         'price': price,
                         'quantity': quantity,
                         'description': row.get('description', '').strip(),

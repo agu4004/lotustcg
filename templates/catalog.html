@@ -50,6 +50,21 @@
                             </select>
                         </div>
 
+                        <!-- Class Filter -->
+                        <div class="mb-3">
+                            <label for="card_class" class="form-label">Class</label>
+                            <select class="form-select" id="card_class" name="card_class">
+                                <option value="">All Classes</option>
+                                {% for class_name in all_classes %}
+                                {% set display_class = class_name or 'General' %}
+                                <option value="{{ class_name }}"
+                                        {% if current_filters.card_class == class_name %}selected{% endif %}>
+                                    {{ display_class }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
                         <!-- Foiling Filter -->
                         <div class="mb-3">
                             <label for="foiling" class="form-label">Foiling</label>
@@ -247,6 +262,7 @@
                                 <p class="mb-1"><strong>Code:</strong> {{ card.card_code }}</p>
                                 {% endif %}
                                 <p class="mb-1"><strong>Condition:</strong> {{ card.condition }}</p>
+                                <p class="mb-1"><strong>Language:</strong> {{ card.language or 'English' }}</p>
                                 <p class="mb-1"><strong>Foiling:</strong>
                                     {% if card.foiling == 'NF' %}
                                         <span class="badge bg-light text-dark">Non Foil</span>
