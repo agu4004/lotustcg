@@ -1,7 +1,7 @@
 """Add language field to Card model
 
 Revision ID: add_language_to_cards
-Revises: add_card_class_column
+Revises: add_card_code_column
 Create Date: 2025-09-28
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'add_language_to_cards'
-down_revision = 'add_card_class_column'
+down_revision = 'add_card_code_column'
 branch_labels = None
 depends_on = None
 

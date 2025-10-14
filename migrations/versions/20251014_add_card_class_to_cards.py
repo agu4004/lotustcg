@@ -1,7 +1,7 @@
 """Add card_class column to cards table
 
 Revision ID: add_card_class_column
-Revises: add_card_code_column
+Revises: add_language_to_cards
 Create Date: 2025-10-14
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'add_card_class_column'
-down_revision = 'add_card_code_column'
+down_revision = 'add_language_to_cards'
 branch_labels = None
 depends_on = None
 
