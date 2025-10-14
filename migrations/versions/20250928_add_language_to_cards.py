@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'add_language_to_cards'
-down_revision = '0fdc9548ed30'
+down_revision = 'add_card_code_column'
 branch_labels = None
 depends_on = None
 
