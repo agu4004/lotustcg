@@ -137,6 +137,7 @@
                             <span class="badge bg-secondary">{{ card.art_style }}</span>
                         {% endif %}
                     </p>
+                    <p class="mb-1"><strong>Language:</strong> {{ card.language or 'English' }}</p>
                     <p><strong>Price:</strong> <span class="text-success fw-bold">{{ "{:,.0f}".format(card.price) }} VND</span></p>
                     <p><strong>Available:</strong> {{ card.quantity }} copies</p>
                     {% if card.description %}

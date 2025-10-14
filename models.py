@@ -216,6 +216,8 @@ class Card(db.Model):
     set_name: Mapped[str] = mapped_column(String(80), nullable=False, default='Unknown')
     rarity: Mapped[str] = mapped_column(String(20), nullable=False, default='Common')
     condition: Mapped[str] = mapped_column(String(20), nullable=False, default='Near Mint')
+    # Default language for this catalog card entry (used in catalog/home/orders when not a user item)
+    language: Mapped[str] = mapped_column(String(20), nullable=True, default='English')
     price: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False, default=0.0)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     description: Mapped[str] = mapped_column(Text, nullable=True)
@@ -224,6 +226,7 @@ class Card(db.Model):
     card_code: Mapped[str] = mapped_column(String(80), nullable=True)
     foiling: Mapped[str] = mapped_column(String(20), nullable=False, default='NF')
     art_style: Mapped[str] = mapped_column(String(20), nullable=False, default='normal')
+    card_class: Mapped[str] = mapped_column(String(50), nullable=True, default='General')
     # Owner of the catalog item: 'shop' for admin-managed stock
     owner: Mapped[str] = mapped_column(String(80), nullable=True, default='shop')
     is_deleted: Mapped[bool] = mapped_column(db.Boolean, nullable=False, default=False)
@@ -246,6 +249,7 @@ class Card(db.Model):
             'set_name': self.set_name,
             'rarity': self.rarity,
             'condition': self.condition,
+            'language': self.language or 'English',
             'price': float(self.price),
             'quantity': self.quantity,
             'description': self.description or '',
@@ -253,6 +257,7 @@ class Card(db.Model):
             'card_code': self.card_code or '',
             'foiling': self.foiling,
             'art_style': self.art_style,
+            'card_class': self.card_class or 'General',
             'is_deleted': self.is_deleted,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None

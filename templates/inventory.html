@@ -199,6 +199,13 @@
                                 </select>
                             </div>
                             <div class="col-md-3 mb-3">
+                                <label for="language" class="form-label">Language</label>
+                                <select class="form-select" id="language" name="language">
+                                    <option value="English">English</option>
+                                    <option value="Not English">Not English</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3 mb-3">
                                 <label for="foiling" class="form-label">Foiling</label>
                                 <select class="form-select" id="foiling" name="foiling">
                                     <option value="NF">Non Foil (NF)</option>
@@ -376,6 +383,7 @@
                                     <p class="mb-1"><strong>Condition:</strong>
                                         <span class="badge bg-secondary">{{ item.condition }}</span>
                                     </p>
+                                    <p class="mb-1"><strong>Language:</strong> {{ item.language or 'English' }}</p>
                                     <p class="mb-1"><strong>Rarity:</strong>
                                         <span class="badge bg-light text-dark">{{ item.card_rarity }}</span>
                                     </p>

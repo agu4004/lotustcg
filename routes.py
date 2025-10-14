@@ -360,6 +360,7 @@ def catalog():
     set_filter = request.args.get('set', '')
     rarity_filter = request.args.get('rarity', '')
     foiling_filter = request.args.get('foiling', '')
+    class_filter = request.args.get('card_class', '')
 
     # Price range filters
     min_price = None
@@ -397,13 +398,14 @@ def catalog():
         set_filter=set_filter,
         rarity_filter=rarity_filter,
         foiling_filter=foiling_filter,
+        card_class_filter=class_filter,
         min_price=min_price,
         max_price=max_price
     )
 
     # Get user inventory items
     user_inventory_items = []
-    if query or set_filter or rarity_filter or foiling_filter or min_price or max_price:
+    if query or set_filter or rarity_filter or foiling_filter or class_filter or min_price or max_price:
         # Apply filters to user inventory items
         user_items_query = InventoryItem.query.join(Card).filter(
             InventoryItem.is_verified == True,
@@ -419,6 +421,8 @@ def catalog():
             user_items_query = user_items_query.filter(Card.rarity == rarity_filter)
         if foiling_filter:
             user_items_query = user_items_query.filter(Card.foiling == foiling_filter)
+        if class_filter:
+            user_items_query = user_items_query.filter(Card.card_class == class_filter)
         # Price filtering removed - no longer using sale_price
 
         user_inventory_items = user_items_query.all()
@@ -437,7 +441,8 @@ def catalog():
             },
             'display_price': float(item.card.price) if item.card else 0,
             'condition': item.condition,
-            'quantity': item.quantity
+            'quantity': item.quantity,
+            'language': item.language or card_data.get('language') or 'English'
         })
         user_cards.append(card_data)
 
@@ -486,6 +491,7 @@ def catalog():
     all_sets = storage.get_unique_sets()
     all_rarities = storage.get_unique_rarities()
     all_foilings = storage.get_unique_foilings()
+    all_classes = storage.get_unique_classes()
 
     # Add user inventory sets/rarities/foilings (only public items)
     user_sets = db.session.query(Card.set_name.distinct()).join(InventoryItem).filter(
@@ -500,10 +506,15 @@ def catalog():
         InventoryItem.is_verified == True,
         InventoryItem.is_public == True
     ).all()
+    user_classes = db.session.query(Card.card_class.distinct()).join(InventoryItem).filter(
+        InventoryItem.is_verified == True,
+        InventoryItem.is_public == True
+    ).all()
 
     all_sets.extend([s[0] for s in user_sets if s[0] not in all_sets])
     all_rarities.extend([r[0] for r in user_rarities if r[0] not in all_rarities])
     all_foilings.extend([f[0] for f in user_foilings if f[0] not in all_foilings])
+    all_classes.extend([(c[0] or 'General') for c in user_classes if (c[0] or 'General') not in all_classes])
 
     # Calculate pagination info
     has_prev = page > 1
@@ -534,6 +545,7 @@ def catalog():
                           all_sets=all_sets,
                           all_rarities=all_rarities,
                           all_foilings=all_foilings,
+                          all_classes=all_classes,
                           current_filters={
                               'q': query,
                               'set': set_filter,
@@ -541,6 +553,7 @@ def catalog():
                               'foiling': foiling_filter,
                               'min_price': request.args.get('min_price', ''),
                               'max_price': request.args.get('max_price', ''),
+                              'card_class': class_filter,
                               'sort': sort_by
                           },
                           # Pagination data
@@ -1583,6 +1596,7 @@ def user_inventory():
                     'card_code': getattr(item.card, 'card_code', '') if item.card else '',
                     'quantity': item.quantity,
                     'condition': item.condition,
+                    'language': item.language or 'English',
                     'is_verified': item.is_verified,
                     'verification_status': item.verification_status,
                     'added_at': item.added_at,
@@ -1745,20 +1759,21 @@ def view_user_inventory(user_id):
         if user_inventory.items:
             for item in user_inventory.items:
                 # Only show verified items with positive quantity in public view
-                if item.is_verified and getattr(item, 'quantity', 0) > 0:
-                    item_data = {
-                        'id': item.id,
-                        'card_name': item.card.name if item.card else 'Unknown Card',
-                        'card_set': item.card.set_name if item.card else 'Unknown',
-                        'card_code': getattr(item.card, 'card_code', '') if item.card else '',
-                        'quantity': item.quantity,
-                        'condition': item.condition,
-                        'verification_status': item.verification_status,
-                        'added_at': item.added_at,
-                        'card_image': item.card.image_url if item.card else None,
-                        'card_rarity': item.card.rarity if item.card else 'Unknown',
-                        'card_price': float(item.card.price) if item.card else 0
-                    }
+                    if item.is_verified and getattr(item, 'quantity', 0) > 0:
+                        item_data = {
+                            'id': item.id,
+                            'card_name': item.card.name if item.card else 'Unknown Card',
+                            'card_set': item.card.set_name if item.card else 'Unknown',
+                            'card_code': getattr(item.card, 'card_code', '') if item.card else '',
+                            'quantity': item.quantity,
+                            'condition': item.condition,
+                            'language': item.language or 'English',
+                            'verification_status': item.verification_status,
+                            'added_at': item.added_at,
+                            'card_image': item.card.image_url if item.card else None,
+                            'card_rarity': item.card.rarity if item.card else 'Unknown',
+                            'card_price': float(item.card.price) if item.card else 0
+                        }
                     inventory_items.append(item_data)
 
         # Sort items by card name
@@ -1938,6 +1953,7 @@ def add_inventory_item():
             card = Card(
                 name=card_name,
                 set_name=data.get('card_set', 'Unknown'),
+                card_class=(str(data.get('card_class') or data.get('class') or 'General').strip() or 'General'),
                 rarity=data.get('card_rarity', 'Common'),
                 condition=data.get('condition', 'Near Mint'),
                 price=float(data.get('market_price', 0.0)),  # Use market_price if provided
@@ -2660,10 +2676,10 @@ def download_sample_csv():
     """Download sample CSV template"""
     from flask import Response
     
-    sample_csv = """name,set_name,rarity,condition,price,quantity,description,image_url,foiling,art_style,card_code
-"Lightning Bolt","Core Set","Common","Near Mint",1.50,10,"Classic red instant spell","https://example.com/lightning-bolt.jpg","NF","normal","LB-CORE-001"
-"Black Lotus","Alpha","Legendary","Light Play",5000.00,1,"The most powerful mox","https://example.com/black-lotus.jpg","NF","normal","BL-ALPHA-000"
-"Counterspell","Beta","Common","Near Mint",25.00,5,"Counter target spell","https://example.com/counterspell.jpg","RF","EA","CS-BETA-010"
+    sample_csv = """name,set_name,class,rarity,condition,language,price,quantity,description,image_url,foiling,art_style,card_code
+"Lightning Bolt","Core Set","Generic","Common","Near Mint","English",1.50,10,"Classic red instant spell","https://example.com/lightning-bolt.jpg","NF","normal","LB-CORE-001"
+"Black Lotus","Alpha","Legendary","Legendary","Light Play","English",5000.00,1,"The most powerful mox","https://example.com/black-lotus.jpg","NF","normal","BL-ALPHA-000"
+"Counterspell","Beta","Wizard","Common","Near Mint","Not English",25.00,5,"Counter target spell","https://example.com/counterspell.jpg","RF","EA","CS-BETA-010"
 """
     
     return Response(
@@ -2687,22 +2703,24 @@ def download_inventory_csv():
     output = io.StringIO()
     writer = csv.writer(output)
 
-    # Write header (same format as sample CSV, plus card_code)
-    writer.writerow(['name', 'set_name', 'rarity', 'condition', 'price', 'quantity', 'description', 'image_url', 'foiling', 'art_style', 'card_code'])
+    # Write header (same format as sample CSV)
+    writer.writerow(['name', 'set_name', 'class', 'rarity', 'condition', 'language', 'price', 'quantity', 'description', 'image_url', 'foiling', 'art_style', 'card_code'])
 
     # Write card data
     for card in cards:
         writer.writerow([
             card['name'],
             card['set_name'],
+            card.get('card_class', 'General'),
             card['rarity'],
             card['condition'],
+            card.get('language', 'English'),
             card['price'],
             card['quantity'],
-            card['description'],
-            card['image_url'],
-            card['foiling'],
-            card['art_style'],
+            card.get('description', ''),
+            card.get('image_url', ''),
+            card.get('foiling', 'NF'),
+            card.get('art_style', 'normal'),
             card.get('card_code', '')
         ])
 
@@ -3316,8 +3334,17 @@ def edit_card_form(card_id):
         # Get form data
         card.name = request.form.get('name', card.name)
         card.set_name = request.form.get('set_name', card.set_name)
+        incoming_class = request.form.get('card_class')
+        if incoming_class is not None:
+            card.card_class = incoming_class.strip() or 'General'
         card.rarity = request.form.get('rarity', card.rarity)
         card.condition = request.form.get('condition', card.condition)
+        try:
+            lang = request.form.get('language')
+            if lang:
+                card.language = lang
+        except Exception:
+            pass
         card.description = request.form.get('description', card.description)
         card.image_url = request.form.get('image_url', card.image_url)
         card.foiling = request.form.get('foiling', card.foiling)
@@ -3388,10 +3415,12 @@ def add_card_form():
             set_name=request.form.get('set_name', 'Unknown'),
             rarity=request.form.get('rarity', 'Common'),
             condition=request.form.get('condition', 'Near Mint'),
+            language=request.form.get('language', 'English'),
             description=request.form.get('description', ''),
             image_url=request.form.get('image_url', ''),
             foiling=request.form.get('foiling', 'NF'),
             art_style=request.form.get('art_style', 'normal'),
+            card_class=((request.form.get('card_class') or 'General').strip() or 'General'),
             owner='shop'
         )
         
@@ -3805,6 +3834,16 @@ def admin_order_detail(order_id):
             owner_username = None
         owner_username = owner_username or 'shop'
 
+        # Determine language: prefer inventory item language, fallback to card language
+        lang = None
+        try:
+            if getattr(item, 'inventory_item', None) and getattr(item.inventory_item, 'language', None):
+                lang = item.inventory_item.language
+            elif getattr(item, 'card', None) and getattr(item.card, 'language', None):
+                lang = item.card.language
+        except Exception:
+            lang = None
+
         order_items.append({
             'card': item.card,
             'quantity': item.quantity,
@@ -3812,6 +3851,7 @@ def admin_order_detail(order_id):
             'total_price': float(item.total_price),
             'foiling': item.card.foiling if item.card else None,
             'art_style': item.card.art_style if item.card else None,
+            'language': lang or 'English',
             'owner': owner_username,
         })
 

@@ -15,6 +15,15 @@
     font-size: 10px;
     padding: 0.2em 0.4em;
 }
+/* Ensure table cells wrap but headers stay intact */
+.table-compact th {
+    white-space: nowrap;
+    word-break: normal;
+}
+.table-compact td {
+    white-space: normal;
+    word-break: break-word; /* allow long values to wrap */
+}
 </style>
 <div class="container my-4">
     <div class="row">
@@ -34,7 +43,7 @@
                             <input type="file" class="form-control" id="csv_file" name="csv_file" 
                                    accept=".csv" required>
                             <div class="form-text">
-                                Upload a CSV file with card data. Required columns: name, set_name, rarity, condition, price, quantity
+                                Upload a CSV file with card data. Required columns: name, set_name, class, rarity, condition, price, quantity
                             </div>
                         </div>
                         
@@ -168,6 +177,12 @@
                                     <td>Near Mint, Light Play, Moderately Play</td>
                                 </tr>
                                 <tr>
+                                    <td><code>language</code></td>
+                                    <td><span class="badge bg-warning">No</span></td>
+                                    <td>Card language</td>
+                                    <td>English, Not English</td>
+                                </tr>
+                                <tr>
                                     <td><code>price</code></td>
                                     <td><span class="badge bg-warning">No</span></td>
                                     <td>Price in dollars</td>
@@ -246,6 +261,10 @@
                                         <input type="text" class="form-control" id="add-set" name="set_name" value="Unknown">
                                     </div>
                                     <div class="col-md-3">
+                                        <label for="add-class" class="form-label">Class</label>
+                                        <input type="text" class="form-control" id="add-class" name="card_class" value="General">
+                                    </div>
+                                    <div class="col-md-3">
                                         <label for="add-rarity" class="form-label">Rarity</label>
                                         <select class="form-select" id="add-rarity" name="rarity">
                                             <option value="Common">Common</option>
@@ -266,6 +285,13 @@
                                             <option value="Moderately Play">Moderately Play</option>
                                             <option value="Heavy Play">Heavy Play</option>
                                             <option value="Damaged">Damaged</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="add-language" class="form-label">Language</label>
+                                        <select class="form-select" id="add-language" name="language">
+                                            <option value="English">English</option>
+                                            <option value="Not English">Not English</option>
                                         </select>
                                     </div>
                                     <div class="col-md-3">
@@ -317,20 +343,22 @@
                     <p class="text-muted mb-3">{{ cards|length }} card(s) in inventory</p>
                     <div class="table-responsive">
                             <div style="max-height: 600px; overflow-y: auto;">
-                                <table class="table table-hover table-compact">
+                                <table class="table table-hover table-compact w-100">
                                     <thead>
                                         <tr>
-                                            <th width="50">Image</th>
-                                            <th width="150">Name</th>
-                                            <th width="90">Code</th>
-                                            <th width="80">Set</th>
-                                            <th width="70">Rarity</th>
-                                            <th width="80">Condition</th>
-                                            <th width="70">Foiling</th>
-                                            <th width="80">Art Style</th>
-                                            <th width="70">Price</th>
-                                            <th width="60">Qty</th>
-                                            <th width="100">Actions</th>
+                                            <th>Image</th>
+                                            <th>Name</th>
+                                            <th>Code</th>
+                                            <th>Set</th>
+                                            <th>Class</th>
+                                            <th>Rarity</th>
+                                            <th>Condition</th>
+                                            <th>Language</th>
+                                            <th>Foiling</th>
+                                            <th>Art Style</th>
+                                            <th>Price</th>
+                                            <th>Qty</th>
+                                            <th>Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -375,6 +403,10 @@
                                                                 <input type="text" class="form-control form-control-sm" name="set_name" value="{{ card.set_name }}">
                                                             </div>
                                                             <div class="col-6">
+                                                                <label class="form-label-sm text-muted fw-bold">Class</label>
+                                                                <input type="text" class="form-control form-control-sm" name="card_class" value="{{ card.card_class or 'General' }}">
+                                                            </div>
+                                                            <div class="col-6">
                                                                 <label class="form-label-sm text-muted fw-bold">Rarity</label>
                                                                 <select class="form-select form-select-sm" name="rarity">
                                                                     <option value="Common" {% if card.rarity == 'Common' %}selected{% endif %}>Common</option>
@@ -395,6 +427,13 @@
                                                                     <option value="Moderately Play" {% if card.condition == 'Moderately Play' %}selected{% endif %}>Moderately Play</option>
                                                                     <option value="Heavy Play" {% if card.condition == 'Heavy Play' %}selected{% endif %}>Heavy Play</option>
                                                                     <option value="Damaged" {% if card.condition == 'Damaged' %}selected{% endif %}>Damaged</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-6">
+                                                                <label class="form-label-sm text-muted fw-bold">Language</label>
+                                                                <select class="form-select form-select-sm" name="language">
+                                                                    <option value="English" {% if (card.language or 'English') == 'English' %}selected{% endif %}>English</option>
+                                                                    <option value="Not English" {% if card.language == 'Not English' %}selected{% endif %}>Not English</option>
                                                                 </select>
                                                             </div>
                                                             <div class="col-3">
@@ -456,6 +495,9 @@
                                                 <div id="set-display-{{ card.id }}" style="font-size: 12px;">{{ card.set_name }}</div>
                                             </td>
                                             <td>
+                                                <div id="class-display-{{ card.id }}" style="font-size: 12px;">{{ card.card_class or 'General' }}</div>
+                                            </td>
+                                            <td>
                                                 <div id="rarity-display-{{ card.id }}">
                                                     {% set rarity_l = (card.rarity or '') | lower %}
                                                     {% if rarity_l == 'majestic' %}
@@ -473,6 +515,9 @@
                                             </td>
                                             <td>
                                                 <div id="condition-display-{{ card.id }}" style="font-size: 12px;">{{ card.condition }}</div>
+                                            </td>
+                                            <td>
+                                                <div id="language-display-{{ card.id }}" style="font-size: 12px;">{{ card.language or 'English' }}</div>
                                             </td>
                                             <td>
                                                 <div id="foiling-display-{{ card.id }}">
@@ -532,11 +577,107 @@
                                                 </div>
                                             </td>
                                         </tr>
+                                        <!-- Wide edit row for this card -->
+                                        <tr id="edit-row-{{ card.id }}" style="display: none;">
+                                            <td colspan="12" style="background-color: transparent;">
+                                                <div class="p-3 bg-transparent">
+                                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                                        <h6 class="mb-0"><i class="fas fa-edit me-2"></i>Edit Card: {{ card.name }}</h6>
+                                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleEdit('{{ card.id }}')"><i class="fas fa-times me-1"></i>Close</button>
+                                                    </div>
+                                                    <form id="edit-wide-{{ card.id }}" method="POST" action="{{ url_for('edit_card_form', card_id=card.id) }}">
+                                                        <div class="row g-3">
+                                                            <div class="col-md-6">
+                                                                <label class="form-label">Card Name</label>
+                                                                <input type="text" class="form-control" name="name" value="{{ card.name }}" required>
+                                                            </div>
+                                                            <div class="col-md-3">
+                                                                <label class="form-label">Set</label>
+                                                                <input type="text" class="form-control" name="set_name" value="{{ card.set_name }}">
+                                                            </div>
+                                                            <div class="col-md-3">
+                                                                <label class="form-label">Class</label>
+                                                                <input type="text" class="form-control" name="card_class" value="{{ card.card_class or 'General' }}">
+                                                            </div>
+                                                            <div class="col-md-3">
+                                                                <label class="form-label">Rarity</label>
+                                                                <select class="form-select" name="rarity">
+                                                                    <option value="Common" {% if card.rarity == 'Common' %}selected{% endif %}>Common</option>
+                                                                    <option value="Rare" {% if card.rarity == 'Rare' %}selected{% endif %}>Rare</option>
+                                                                    <option value="Super Rare" {% if card.rarity == 'Super Rare' %}selected{% endif %}>Super Rare</option>
+                                                                    <option value="Majestic" {% if card.rarity == 'Majestic' %}selected{% endif %}>Majestic</option>
+                                                                    <option value="Legendary" {% if card.rarity == 'Legendary' %}selected{% endif %}>Legendary</option>
+                                                                    <option value="Promo" {% if card.rarity == 'Promo' %}selected{% endif %}>Promo</option>
+                                                                    <option value="Treasure" {% if card.rarity == 'Treasure' %}selected{% endif %}>Treasure</option>
+                                                                    <option value="Marvel" {% if card.rarity == 'Marvel' %}selected{% endif %}>Marvel</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-md-3">
+                                                                <label class="form-label">Condition</label>
+                                                                <select class="form-select" name="condition">
+                                                                    <option value="Near Mint" {% if card.condition == 'Near Mint' %}selected{% endif %}>Near Mint</option>
+                                                                    <option value="Light Play" {% if card.condition == 'Light Play' %}selected{% endif %}>Light Play</option>
+                                                                    <option value="Moderately Play" {% if card.condition == 'Moderately Play' %}selected{% endif %}>Moderately Play</option>
+                                                                    <option value="Heavy Play" {% if card.condition == 'Heavy Play' %}selected{% endif %}>Heavy Play</option>
+                                                                    <option value="Damaged" {% if card.condition == 'Damaged' %}selected{% endif %}>Damaged</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-md-3">
+                                                                <label class="form-label">Language</label>
+                                                                <select class="form-select" name="language">
+                                                                    <option value="English" {% if (card.language or 'English') == 'English' %}selected{% endif %}>English</option>
+                                                                    <option value="Not English" {% if card.language == 'Not English' %}selected{% endif %}>Not English</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-md-3">
+                                                                <label class="form-label">Price ($)</label>
+                                                                <input type="number" class="form-control" name="price" value="{{ card.price }}" step="0.01" min="0">
+                                                            </div>
+                                                            <div class="col-md-3">
+                                                                <label class="form-label">Quantity</label>
+                                                                <input type="number" class="form-control" name="quantity" value="{{ card.quantity }}" min="0">
+                                                            </div>
+                                                            <div class="col-md-6">
+                                                                <label class="form-label">Image URL</label>
+                                                                <input type="url" class="form-control" name="image_url" value="{{ card.image_url }}" placeholder="https://example.com/card-image.jpg">
+                                                            </div>
+                                                            <div class="col-md-3">
+                                                                <label class="form-label">Foiling</label>
+                                                                <select class="form-select" name="foiling">
+                                                                    <option value="NF" {% if card.foiling == 'NF' %}selected{% endif %}>Non Foil (NF)</option>
+                                                                    <option value="RF" {% if card.foiling == 'RF' %}selected{% endif %}>Rainbow Foil (RF)</option>
+                                                                    <option value="CF" {% if card.foiling == 'CF' %}selected{% endif %}>Cold Foil (CF)</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-md-3">
+                                                                <label class="form-label">Art Style</label>
+                                                                <select class="form-select" name="art_style">
+                                                                    <option value="Normal" {% if card.art_style == 'Normal' %}selected{% endif %}>Normal</option>
+                                                                    <option value="EA" {% if card.art_style == 'EA' %}selected{% endif %}>Extended Art (EA)</option>
+                                                                    <option value="WB" {% if card.art_style == 'WB' %}selected{% endif %}>White Border (WB)</option>
+                                                                    <option value="ALT" {% if card.art_style == 'ALT' %}selected{% endif %}>Alternate Art (ALT)</option>
+                                                                    <option value="GF" {% if card.art_style == 'GF' %}selected{% endif %}>Golden (GF)</option>
+                                                                    <option value="Marvel" {% if card.art_style == 'Marvel' %}selected{% endif %}>Marvel</option>
+                                                                </select>
+                                                            </div>
+                                                            <div class="col-12">
+                                                                <label class="form-label">Description</label>
+                                                                <textarea class="form-control" name="description" rows="2" placeholder="Card description">{{ card.description }}</textarea>
+                                                            </div>
+                                                            <div class="col-12 d-flex justify-content-end gap-2">
+                                                                <button type="button" class="btn btn-secondary" onclick="toggleEdit('{{ card.id }}')"><i class="fas fa-times me-1"></i>Cancel</button>
+                                                                <button type="submit" class="btn btn-success"><i class="fas fa-save me-1"></i>Save Changes</button>
+                                                            </div>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </td>
+                                        </tr>
                                         {% endfor %}
                                     </tbody>
                                 </table>
                             </div>
-                        </table>
+                        </div>
                     </div>
                     
                     {% if cards %}
@@ -550,7 +691,6 @@
                     {% endif %}
                 </div>
             </div>
-        </div>
         
         <div class="col-lg-4">
             <!-- Admin Info -->
@@ -839,36 +979,39 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Toggle inline editing for cards
 function toggleEdit(cardId) {
+    // Prefer wide edit row if present
+    const mainRow = document.getElementById(`card-row-${cardId}`);
+    const wideRow = document.getElementById(`edit-row-${cardId}`);
+    if (mainRow && wideRow) {
+        const showingWide = wideRow.style.display !== 'none' && wideRow.style.display !== '' ? true : false;
+        wideRow.style.display = showingWide ? 'none' : 'table-row';
+        mainRow.style.display = showingWide ? 'table-row' : 'none';
+        return;
+    }
+
+    // Fallback to legacy inline toggle (kept for compatibility)
     const cardDisplay = document.getElementById(`card-display-${cardId}`);
     const cardEdit = document.getElementById(`card-edit-${cardId}`);
     const imageDisplay = document.getElementById(`image-display-${cardId}`);
     const imageEdit = document.getElementById(`image-edit-${cardId}`);
-    
-    // Toggle card name/description
     if (cardDisplay && cardEdit) {
         cardDisplay.style.display = cardDisplay.style.display === 'none' ? 'block' : 'none';
         cardEdit.style.display = cardEdit.style.display === 'none' ? 'block' : 'none';
     }
-    
-    // Toggle image display hint
     if (imageDisplay && imageEdit) {
         imageDisplay.style.display = imageDisplay.style.display === 'none' ? 'block' : 'none';
         imageEdit.style.display = imageEdit.style.display === 'none' ? 'block' : 'none';
     }
-    
-    // Toggle all other display elements for this card
     const setDisplay = document.getElementById(`set-display-${cardId}`);
+    const classDisplay = document.getElementById(`class-display-${cardId}`);
     const rarityDisplay = document.getElementById(`rarity-display-${cardId}`);
     const conditionDisplay = document.getElementById(`condition-display-${cardId}`);
     const foilingDisplay = document.getElementById(`foiling-display-${cardId}`);
     const artStyleDisplay = document.getElementById(`art-style-display-${cardId}`);
     const priceDisplay = document.getElementById(`price-display-${cardId}`);
     const quantityDisplay = document.getElementById(`quantity-display-${cardId}`);
-
-    [setDisplay, rarityDisplay, conditionDisplay, foilingDisplay, artStyleDisplay, priceDisplay, quantityDisplay].forEach(el => {
-        if (el) {
-            el.style.display = el.style.display === 'none' ? 'block' : 'none';
-        }
+    [setDisplay, classDisplay, rarityDisplay, conditionDisplay, foilingDisplay, artStyleDisplay, priceDisplay, quantityDisplay].forEach(el => {
+        if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
     });
 }
 

@@ -141,6 +141,7 @@
                                     <th width="90">Code</th>
                                     <th width="80" class="text-center">Rarity</th>
                                     <th width="80">Condition</th>
+                                    <th width="90">Language</th>
                                     <th width="70" class="text-center">Quantity</th>
                                     <th width="80" class="text-end">Price (VND)</th>
                                 </tr>
@@ -180,6 +181,7 @@
                                         {% endif %}
                                     </td>
                                     <td class="align-middle">{{ item.condition }}</td>
+                                    <td class="align-middle">{{ item.language or 'English' }}</td>
                                     <td class="align-middle text-center">
                                         <span class="badge bg-primary">{{ item.quantity }}</span>
                                     </td>

@@ -179,6 +179,7 @@
                                                     {% endif %}
                                                     <div>
                                                         <strong>{{ item.card.name }}</strong><br>
+                                                        <small class="text-muted">Language: {{ item.language or 'English' }}</small><br>
                                                         {% if item.card.card_code %}
                                                         <small class="text-muted">Code: {{ item.card.card_code }}</small><br>
                                                         {% endif %}

@@ -89,6 +89,11 @@
                     </div>
 
                     <div class="row mb-3">
+                        <div class="col-sm-4"><strong>Language:</strong></div>
+                        <div class="col-sm-8">{{ card.language or 'English' }}</div>
+                    </div>
+
+                    <div class="row mb-3">
                         <div class="col-sm-4"><strong>Foiling:</strong></div>
                         <div class="col-sm-8">
                             {% if card.foiling == 'NF' %}
