@@ -462,9 +462,7 @@ document.addEventListener('DOMContentLoaded', function() {
     toggleCreditInputs();
 
     if (applyCreditsBtn) applyCreditsBtn.addEventListener('click', function() {
-        const amountDue = {{ (total_price|int) }}; // pre-coupon total
-        const hasCoupon = {{ 'true' if applied_coupon else 'false' }};
-        const couponPct = hasCoupon ? {{ (applied_coupon.discount_percentage or 0)|int }} : null;
+        const amountDue = {{ (final_total|int) }}; // after-coupon total
         const mode = creditMode.value;
         const idem = 'cred-' + Date.now() + '-' + Math.random().toString(36).slice(6);
 
@@ -473,7 +471,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         const payload = {
             amount_due_vnd: amountDue,
-            coupon_percentage: couponPct,
+            coupon_percentage: null,  // Coupon already applied to final_total
             mode
         };
         if (mode === 'manual') {
