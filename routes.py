@@ -866,9 +866,12 @@ def checkout():
             discount_amount = 0
             final_total = total_amount
 
+            logger.info(f"Session data - applied_coupon_id: {session.get('applied_coupon_id')}, credit_breakdown: {session.get('credit_breakdown')}")
+
             if 'applied_coupon_id' in session:
                 try:
                     coupon_id = session['applied_coupon_id']
+                    logger.info(f"Attempting to load coupon with ID: {coupon_id}")
                     coupon = Coupon.query.get(coupon_id)
                     if coupon and coupon.is_active:
                         applied_coupon = coupon
@@ -881,26 +884,37 @@ def checkout():
                         # Increment coupon usage count
                         coupon.usage_count += 1
                         db.session.add(coupon)
+                    else:
+                        logger.warning(f"Coupon {coupon_id} not found or inactive")
                 except Exception as e:
                     logger.error(f"Error processing coupon for order: {e}")
+                    import traceback
+                    logger.error(f"Coupon processing traceback: {traceback.format_exc()}")
 
             # Apply credits at order placement if a plan exists from preview
             try:
                 credit_after_pct = session.get('credit_amount_after_pct')
                 credit_breakdown = session.get('credit_breakdown')
+                logger.info(f"Credit session data - credit_after_pct: {credit_after_pct}, breakdown: {credit_breakdown}")
                 if credit_breakdown is not None:
                     expected_base = int(round(final_total))
+                    logger.info(f"Credit check - expected_base: {expected_base}, credit_after_pct: {credit_after_pct}")
                     if credit_after_pct is None or abs(int(credit_after_pct) - expected_base) <= 1:
                         # Redeem now, atomically, using breakdown
                         idem_key = f"order:{order_id}"
+                        logger.info(f"Applying credits with breakdown: {credit_breakdown}")
                         # Do not pass related_order_id (ledger column is integer in DB, order id is string)
                         res = svc_apply_credits(current_user.id, expected_base, mode='manual', breakdown=credit_breakdown, idempotency_key=idem_key, related_order_id=None, preview=False)
                         final_total = float(res.get('remaining_vnd'))
                         logger.info(f"Credits redeemed at order placement: applied={res.get('credits_applied_vnd')}, remaining={final_total}")
                     else:
-                        logger.warning("Credit base mismatch at order placement; skipping redemption")
+                        logger.warning(f"Credit base mismatch at order placement; skipping redemption. Expected: {expected_base}, Session: {credit_after_pct}")
+                else:
+                    logger.info("No credit breakdown in session - skipping credit application")
             except Exception as e:
                 logger.error(f"Error applying session credits to order: {e}")
+                import traceback
+                logger.error(f"Credit application traceback: {traceback.format_exc()}")
 
             # Create order with final total (including coupon and credit discounts)
             logger.info("Creating order...")
