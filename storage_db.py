@@ -4,7 +4,7 @@ Database-backed storage for TCG cards using SQLAlchemy
 import csv
 import io
 import logging
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional, Sequence, Union
 from sqlalchemy import or_, and_, func
 from app import db
 # storage_db.py (thêm ở đầu file)
@@ -82,7 +82,7 @@ class DatabaseStorage:
         return [card.to_dict() for card in cards]
     
     def search_cards(self, query: str = "", set_filter: str = "", rarity_filter: str = "",
-                    foiling_filter: str = "", card_class_filter: str = "",
+                    foiling_filter: str = "", card_class_filter: Union[str, Sequence[str], None] = None,
                     min_price: Optional[float] = None, max_price: Optional[float] = None) -> List[Dict[str, Any]]:
         """Search cards with filters"""
         from models import Card
@@ -109,7 +109,23 @@ class DatabaseStorage:
             filters.append(Card.foiling == foiling_filter)
 
         if card_class_filter:
-            filters.append(Card.card_class == card_class_filter)
+            normalized_classes: List[str] = []
+            if isinstance(card_class_filter, (list, tuple, set)):
+                normalized_classes = [
+                    str(cls).strip()
+                    for cls in card_class_filter
+                    if cls is not None and str(cls).strip()
+                ]
+            else:
+                single_value = str(card_class_filter).strip()
+                if single_value:
+                    normalized_classes = [single_value]
+
+            if normalized_classes:
+                if len(normalized_classes) == 1:
+                    filters.append(Card.card_class == normalized_classes[0])
+                else:
+                    filters.append(Card.card_class.in_(normalized_classes))
 
         # Price range filters
         if min_price is not None:

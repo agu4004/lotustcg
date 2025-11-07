@@ -28,8 +28,13 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('catalog') }}">
-                            <i class="fas fa-th-large me-1"></i>Catalog
+                        <a class="nav-link" href="{{ url_for('cards') }}">
+                            <i class="fas fa-th-large me-1"></i>Cards
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('accessories') }}">
+                            <i class="fas fa-toolbox me-1"></i>Accessories
                         </a>
                     </li>
                     {% if current_user.is_authenticated %}

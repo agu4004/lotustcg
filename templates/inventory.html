@@ -208,9 +208,9 @@
                             <div class="col-md-3 mb-3">
                                 <label for="foiling" class="form-label">Foiling</label>
                                 <select class="form-select" id="foiling" name="foiling">
-                                    <option value="NF">Non Foil (NF)</option>
-                                    <option value="RF">Rainbow Foil (RF)</option>
-                                    <option value="CF">Cold Foil (CF)</option>
+                                    <option value="NF">Non Foil</option>
+                                    <option value="RF">Rainbow Foil</option>
+                                    <option value="CF">Cold Foil</option>
                                 </select>
                             </div>
                             <div class="col-md-3 mb-3">
@@ -454,9 +454,12 @@
                 <div class="text-center py-5">
                     <i class="fas fa-box-open display-1 text-muted mb-4"></i>
                     <h4>Your inventory is empty</h4>
-                    <p class="text-muted mb-4">Start building your collection by adding cards from the catalog.</p>
-                    <a href="{{ url_for('catalog') }}" class="btn btn-primary">
-                        <i class="fas fa-search me-2"></i>Browse Catalog
+                    <p class="text-muted mb-4">Start building your collection by adding cards and accessories from our catalog.</p>
+                    <a href="{{ url_for('cards') }}" class="btn btn-primary">
+                        <i class="fas fa-search me-2"></i>Browse Cards
+                    </a>
+                    <a href="{{ url_for('accessories') }}" class="btn btn-outline-primary ms-2">
+                        <i class="fas fa-toolbox me-2"></i>Shop Accessories
                     </a>
                 </div>
             {% endif %}

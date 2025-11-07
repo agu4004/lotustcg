@@ -110,6 +110,14 @@ with app.app_context():
     # Initialize default users if they don't exist
     from models import initialize_default_users
     initialize_default_users()
+    # Best-effort: ensure new cards.language column exists when Alembic isn't run
+    try:
+        from apply_card_language_column import apply_card_language_column as _apply_card_language
+        _db_path = getattr(getattr(db, 'engine', None), 'url', None)
+        _db_path = getattr(_db_path, 'database', None)
+        _apply_card_language([_db_path] if _db_path else None)
+    except Exception:
+        pass
 
 # Import routes after app setup
 import routes
