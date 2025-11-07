@@ -7,7 +7,7 @@
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb">
             <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
-            <li class="breadcrumb-item"><a href="{{ url_for('catalog') }}">Catalog</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('cards') }}">Cards</a></li>
             <li class="breadcrumb-item active">{{ card.name }}</li>
         </ol>
     </nav>
@@ -192,8 +192,8 @@
             
             <!-- Actions -->
             <div class="mt-3">
-                <a href="{{ url_for('catalog') }}" class="btn btn-outline-primary">
-                    <i class="fas fa-arrow-left me-2"></i>Back to Catalog
+                <a href="{{ url_for('cards') }}" class="btn btn-outline-primary">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Cards
                 </a>
                 <a href="{{ url_for('view_cart') }}" class="btn btn-outline-success">
                     <i class="fas fa-shopping-cart me-2"></i>View Cart
@@ -270,7 +270,7 @@
         <div class="text-center py-4">
             <i class="fas fa-magic text-muted display-4 mb-3"></i>
             <p class="text-muted">No other cards found from this set.</p>
-            <a href="{{ url_for('catalog', set=card.set_name) }}" class="btn btn-outline-primary">
+            <a href="{{ url_for('cards', set=card.set_name) }}" class="btn btn-outline-primary">
                 <i class="fas fa-search me-2"></i>Browse {{ card.set_name }}
             </a>
         </div>

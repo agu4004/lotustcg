@@ -210,7 +210,7 @@
                                     <td><code>foiling</code></td>
                                     <td><span class="badge bg-warning">No</span></td>
                                     <td>Card foiling type</td>
-                                    <td>NF, RF, CF</td>
+                                    <td>Non Foil, Rainbow Foil, Cold Foil</td>
                                 </tr>
                                 <tr>
                                     <td><code>art_style</code></td>
@@ -309,9 +309,9 @@
                                     <div class="col-md-6">
                                         <label for="add-foiling" class="form-label">Foiling</label>
                                         <select class="form-select" id="add-foiling" name="foiling">
-                                            <option value="NF">Non Foil (NF)</option>
-                                            <option value="RF">Rainbow Foil (RF)</option>
-                                            <option value="CF">Cold Foil (CF)</option>
+                                            <option value="NF">Non Foil</option>
+                                            <option value="RF">Rainbow Foil</option>
+                                            <option value="CF">Cold Foil</option>
                                         </select>
                                     </div>
                                     <div class="col-md-6">
@@ -334,6 +334,58 @@
                                             <i class="fas fa-plus me-2"></i>Add Card
                                         </button>
                                     </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Quick Add Accessory Form -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="mb-0"><i class="fas fa-plus-circle me-2"></i>Quick Add Accessory</h6>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST" action="{{ url_for('add_accessory_form') }}">
+                                <input type="hidden" name="card_class" value="Accessory">
+                                <input type="hidden" name="rarity" value="Common">
+                                <input type="hidden" name="condition" value="Near Mint">
+                                <input type="hidden" name="language" value="English">
+                                <input type="hidden" name="foiling" value="NF">
+                                <input type="hidden" name="art_style" value="normal">
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <label for="add-accessory-name" class="form-label">Accessory Name *</label>
+                                        <input type="text" class="form-control" id="add-accessory-name" name="name" required>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="add-accessory-set" class="form-label">Collection</label>
+                                        <input type="text" class="form-control" id="add-accessory-set" name="set_name" value="Accessories">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="add-accessory-price" class="form-label">Price (₫)</label>
+                                        <input type="number" class="form-control" id="add-accessory-price" name="price" step="0.01" min="0" value="0.00">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="add-accessory-quantity" class="form-label">Quantity</label>
+                                        <input type="number" class="form-control" id="add-accessory-quantity" name="quantity" min="0" value="0">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="add-accessory-code" class="form-label">SKU / Code</label>
+                                        <input type="text" class="form-control" id="add-accessory-code" name="card_code" placeholder="ACC-001">
+                                    </div>
+                                    <div class="col-md-12">
+                                        <label for="add-accessory-description" class="form-label">Description</label>
+                                        <textarea class="form-control" id="add-accessory-description" name="description" rows="2" placeholder="Sleeves, dice, playmats, etc."></textarea>
+                                    </div>
+                                    <div class="col-md-12">
+                                        <label for="add-accessory-image" class="form-label">Image URL</label>
+                                        <input type="url" class="form-control" id="add-accessory-image" name="image_url" placeholder="https://example.com/accessory.jpg">
+                                    </div>
+                                </div>
+                                <div class="mt-3 text-end">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-plus me-1"></i>Add Accessory
+                                    </button>
                                 </div>
                             </form>
                         </div>
@@ -454,9 +506,9 @@
                                                             <div class="col-6">
                                                                 <label class="form-label-sm text-muted fw-bold">Foiling</label>
                                                                 <select class="form-select form-select-sm" name="foiling">
-                                                                    <option value="NF" {% if card.foiling == 'NF' %}selected{% endif %}>Non Foil (NF)</option>
-                                                                    <option value="RF" {% if card.foiling == 'RF' %}selected{% endif %}>Rainbow Foil (RF)</option>
-                                                                    <option value="CF" {% if card.foiling == 'CF' %}selected{% endif %}>Cold Foil (CF)</option>
+                                                                    <option value="NF" {% if card.foiling == 'NF' %}selected{% endif %}>Non Foil</option>
+                                                                    <option value="RF" {% if card.foiling == 'RF' %}selected{% endif %}>Rainbow Foil</option>
+                                                                    <option value="CF" {% if card.foiling == 'CF' %}selected{% endif %}>Cold Foil</option>
                                                                 </select>
                                                             </div>
                                                             <div class="col-6">
@@ -522,11 +574,11 @@
                                             <td>
                                                 <div id="foiling-display-{{ card.id }}">
                                                     {% if card.foiling == 'NF' %}
-                                                        <span class="badge bg-light text-dark" style="font-size: 10px;">NF</span>
+                                                        <span class="badge bg-light text-dark" style="font-size: 10px;">Non Foil</span>
                                                     {% elif card.foiling == 'RF' %}
-                                                        <span class="badge bg-info" style="font-size: 10px;">RF</span>
+                                                        <span class="badge bg-info" style="font-size: 10px;">Rainbow Foil</span>
                                                     {% elif card.foiling == 'CF' %}
-                                                        <span class="badge bg-primary" style="font-size: 10px;">CF</span>
+                                                        <span class="badge bg-primary" style="font-size: 10px;">Cold Foil</span>
                                                     {% else %}
                                                         <span class="badge bg-secondary" style="font-size: 10px;">{{ card.foiling }}</span>
                                                     {% endif %}
@@ -644,9 +696,9 @@
                                                             <div class="col-md-3">
                                                                 <label class="form-label">Foiling</label>
                                                                 <select class="form-select" name="foiling">
-                                                                    <option value="NF" {% if card.foiling == 'NF' %}selected{% endif %}>Non Foil (NF)</option>
-                                                                    <option value="RF" {% if card.foiling == 'RF' %}selected{% endif %}>Rainbow Foil (RF)</option>
-                                                                    <option value="CF" {% if card.foiling == 'CF' %}selected{% endif %}>Cold Foil (CF)</option>
+                                                                    <option value="NF" {% if card.foiling == 'NF' %}selected{% endif %}>Non Foil</option>
+                                                                    <option value="RF" {% if card.foiling == 'RF' %}selected{% endif %}>Rainbow Foil</option>
+                                                                    <option value="CF" {% if card.foiling == 'CF' %}selected{% endif %}>Cold Foil</option>
                                                                 </select>
                                                             </div>
                                                             <div class="col-md-3">
@@ -792,8 +844,8 @@
                     <h5 class="mb-0"><i class="fas fa-bolt me-2"></i>Quick Actions</h5>
                 </div>
                 <div class="card-body d-grid gap-2">
-                    <a href="{{ url_for('catalog') }}" class="btn btn-outline-primary w-100">
-                        <i class="fas fa-eye me-2"></i>View Catalog
+                    <a href="{{ url_for('cards') }}" class="btn btn-outline-primary w-100">
+                        <i class="fas fa-eye me-2"></i>View Cards
                     </a>
                     <a href="{{ url_for('view_cart') }}" class="btn btn-outline-success w-100">
                         <i class="fas fa-shopping-cart me-2"></i>View Cart
