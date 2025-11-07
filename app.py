@@ -118,6 +118,22 @@ with app.app_context():
         _apply_card_language([_db_path] if _db_path else None)
     except Exception:
         pass
+    # Best-effort: ensure new cards.card_class column exists when Alembic isn't run
+    try:
+        from apply_card_class_column import apply_card_class_column as _apply_card_class
+        _db_path = getattr(getattr(db, 'engine', None), 'url', None)
+        _db_path = getattr(_db_path, 'database', None)
+        _apply_card_class([_db_path] if _db_path else None)
+    except Exception:
+        pass
+    # Best-effort: ensure order tracking columns exist when Alembic isn't run
+    try:
+        from apply_order_tracking_columns import apply_order_tracking_columns as _apply_order_tracking
+        _db_path = getattr(getattr(db, 'engine', None), 'url', None)
+        _db_path = getattr(_db_path, 'database', None)
+        _apply_order_tracking([_db_path] if _db_path else None)
+    except Exception:
+        pass
 
 # Import routes after app setup
 import routes

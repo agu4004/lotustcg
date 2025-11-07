@@ -107,9 +107,29 @@
                                         {% if order.shipment_method == 'shipping' %}
                                         <i class="fas fa-truck text-primary" title="Shipping"></i>
                                         <div><small class="text-muted">Shipping</small></div>
+                                        {% elif order.shipment_method == 'inventory' %}
+                                        <i class="fas fa-warehouse text-info" title="Added to Inventory"></i>
+                                        <div><small class="text-muted">Added to Inventory</small></div>
                                         {% else %}
                                         <i class="fas fa-store text-success" title="In-store Pickup"></i>
                                         <div><small class="text-muted">{{ order.pickup_location or 'Pickup' }}</small></div>
+                                        {% endif %}
+                                        {% if order.tracking_number %}
+                                        <div class="mt-2">
+                                            <small class="text-muted">Tracking: <code>{{ order.tracking_number }}</code></small>
+                                        </div>
+                                        {% endif %}
+                                        {% if order.tracking_carrier %}
+                                        <div>
+                                            <small class="text-muted">Carrier: {{ order.tracking_carrier }}</small>
+                                        </div>
+                                        {% endif %}
+                                        {% if order.tracking_url %}
+                                        <div>
+                                            <a href="{{ order.tracking_url }}" class="small" target="_blank" rel="noopener">
+                                                View tracking&nbsp;<i class="fas fa-external-link-alt small"></i>
+                                            </a>
+                                        </div>
                                         {% endif %}
                                     </td>
                                     <td>
@@ -131,30 +151,44 @@
                                                class="btn btn-outline-info btn-sm" title="View Details">
                                                 <i class="fas fa-eye"></i>
                                             </a>
+                                            {% set ship_modal_id = 'shipModal-' ~ order.id %}
                                             {% if order.status == 'pending' %}
                                             <form method="POST" action="{{ url_for('admin_fulfill_order', order_id=order.id) }}" class="d-inline">
                                                 <button type="submit" class="btn btn-outline-success btn-sm" title="Confirm Order" onclick="return confirm('Mark this order as confirmed?')"><i class="fas fa-check"></i></button>
                                             </form>
-                                            <form method="POST" action="{{ url_for('admin_ship_order', order_id=order.id) }}" class="d-inline">
-                                                <button type="submit" class="btn btn-outline-primary btn-sm" title="Mark as Shipped" onclick="return confirm('Mark this order as shipped?')">
-                                                    <i class="fas fa-truck"></i>
-                                                </button>
-                                            </form>
+                                            <button type="button"
+                                                    class="btn btn-outline-primary btn-sm"
+                                                    title="Mark as Shipped"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#{{ ship_modal_id }}">
+                                                <i class="fas fa-truck"></i>
+                                            </button>
                                             <form method="POST" action="{{ url_for('admin_reject_order', order_id=order.id) }}" class="d-inline">
                                                 <button type="submit" class="btn btn-outline-danger btn-sm" title="Reject Order" onclick="return confirm('Reject this order and restore stock?')">
                                                     <i class="fas fa-times"></i>
                                                 </button>
                                             </form>
                                             {% elif order.status == 'confirmed' %}
-                                            <form method="POST" action="{{ url_for('admin_ship_order', order_id=order.id) }}" class="d-inline">
-                                                <button type="submit" class="btn btn-outline-primary btn-sm" title="Mark as Shipped" onclick="return confirm('Mark this order as shipped?')">
-                                                    <i class="fas fa-truck"></i>
-                                                </button>
-                                            </form>
+                                            <button type="button"
+                                                    class="btn btn-outline-primary btn-sm"
+                                                    title="Mark as Shipped"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#{{ ship_modal_id }}">
+                                                <i class="fas fa-truck"></i>
+                                            </button>
+                                            {% elif order.status == 'shipped' %}
+                                            <button type="button"
+                                                    class="btn btn-outline-primary btn-sm"
+                                                    title="Update Tracking"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#{{ ship_modal_id }}">
+                                                <i class="fas fa-truck"></i>
+                                            </button>
                                             {% endif %}
                                         </div>
                                     </td>
                                 </tr>
+
                                 {% endfor %}
                             </tbody>
                         </table>
@@ -246,6 +280,48 @@
                             </tbody>
                         </table>
                     </div>
+                    {% for order in orders %}
+                    <div class="modal fade" id="shipModal-{{ order.id }}" tabindex="-1" aria-labelledby="shipModalLabel-{{ order.id }}" aria-hidden="true">
+                        <div class="modal-dialog modal-dialog-centered modal-lg">
+                            <form method="POST" action="{{ url_for('admin_ship_order', order_id=order.id) }}" class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title" id="shipModalLabel-{{ order.id }}">Mark Order {{ order.id }} as Shipped</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="alert alert-light border">
+                                        <i class="fas fa-info-circle me-2"></i>
+                                        Provide tracking details so the customer can follow their shipment. Leave fields blank for in-store pickups or if tracking is unavailable.
+                                    </div>
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label for="tracking-number-{{ order.id }}" class="form-label">Tracking Number</label>
+                                            <input type="text" class="form-control" id="tracking-number-{{ order.id }}" name="tracking_number" value="{{ order.tracking_number or '' }}">
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="tracking-carrier-{{ order.id }}" class="form-label">Carrier</label>
+                                            <input type="text" class="form-control" id="tracking-carrier-{{ order.id }}" name="tracking_carrier" value="{{ order.tracking_carrier or '' }}">
+                                        </div>
+                                        <div class="col-12">
+                                            <label for="tracking-url-{{ order.id }}" class="form-label">Tracking URL</label>
+                                            <input type="url" class="form-control" id="tracking-url-{{ order.id }}" name="tracking_url" value="{{ order.tracking_url or '' }}" placeholder="https://tracking.example.com/ABC123">
+                                        </div>
+                                        <div class="col-12">
+                                            <label for="tracking-notes-{{ order.id }}" class="form-label">Notes to Customer</label>
+                                            <textarea class="form-control" id="tracking-notes-{{ order.id }}" name="tracking_notes" rows="3" placeholder="Additional shipping details, customs info, etc.">{{ order.tracking_notes or '' }}</textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-truck me-2"></i>Mark as Shipped
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    {% endfor %}
                     {% else %}
                     <div class="text-center py-4">
                         <i class="fas fa-dolly text-muted fa-2x mb-2"></i>
@@ -267,3 +343,11 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endblock %}
+
+
+
+
+
+
+
+

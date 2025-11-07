@@ -9,10 +9,13 @@
         <div class="row align-items-center">
             <div class="col-lg-6">
                 <h1 class="display-4 fw-bold">Welcome to The Lotus TCG</h1>
-                <p class="lead">Discover Majestic and powerful cards for your trading card game collection. Browse our extensive catalog and find the perfect additions to your deck.</p>
-                <div class="d-flex gap-3">
-                    <a href="{{ url_for('catalog') }}" class="btn btn-primary btn-lg">
-                        <i class="fas fa-search me-2"></i>Browse Catalog
+                <p class="lead">Discover majestic cards and battle-ready accessories for your trading card game collection. Browse our refreshed catalog and find the perfect additions to your deck.</p>
+                <div class="d-flex gap-3 flex-wrap">
+                    <a href="{{ url_for('cards') }}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-search me-2"></i>Browse Cards
+                    </a>
+                    <a href="{{ url_for('accessories') }}" class="btn btn-outline-light btn-lg">
+                        <i class="fas fa-toolbox me-2"></i>Shop Accessories
                     </a>
                     {% if current_user.is_authenticated and current_user.is_admin() %}
                     <a href="{{ url_for('admin') }}" class="btn btn-outline-light btn-lg">
@@ -168,9 +171,12 @@
         {% endfor %}
     </div>
     
-    <div class="text-center">
-        <a href="{{ url_for('catalog') }}" class="btn btn-primary">
+    <div class="text-center d-flex justify-content-center gap-3 flex-wrap">
+        <a href="{{ url_for('cards') }}" class="btn btn-primary">
             <i class="fas fa-th-large me-2"></i>View All Cards
+        </a>
+        <a href="{{ url_for('accessories') }}" class="btn btn-outline-primary">
+            <i class="fas fa-toolbox me-2"></i>Shop Accessories
         </a>
     </div>
 </div>

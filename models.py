@@ -299,6 +299,11 @@ class Order(db.Model):
     shipping_province: Mapped[str] = mapped_column(String(100), nullable=True)
     shipping_postal_code: Mapped[str] = mapped_column(String(20), nullable=True)
     shipping_country: Mapped[str] = mapped_column(String(100), nullable=True, default='Vietnam')
+    tracking_number: Mapped[str] = mapped_column(String(120), nullable=True)
+    tracking_carrier: Mapped[str] = mapped_column(String(80), nullable=True)
+    tracking_url: Mapped[str] = mapped_column(String(255), nullable=True)
+    tracking_notes: Mapped[str] = mapped_column(Text, nullable=True)
+    shipped_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -334,6 +339,11 @@ class Order(db.Model):
             'shipping_province': self.shipping_province,
             'shipping_postal_code': self.shipping_postal_code,
             'shipping_country': self.shipping_country,
+            'tracking_number': self.tracking_number,
+            'tracking_carrier': self.tracking_carrier,
+            'tracking_url': self.tracking_url,
+            'tracking_notes': self.tracking_notes,
+            'shipped_at': self.shipped_at.isoformat() if self.shipped_at else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }

@@ -15,6 +15,7 @@ from decimal import Decimal
 import logging
 import re
 from functools import wraps
+from typing import Any, Dict, Optional, Sequence
 from sqlalchemy.orm import load_only
 from sqlalchemy import String
 from datetime import datetime
@@ -29,6 +30,258 @@ from credit_service import (
 from metrics import COUNTERS
 
 logger = logging.getLogger(__name__)
+
+ACCESSORY_CARD_CLASSES: Sequence[str] = ('Accessory', 'Accessories')
+DEFAULT_CARDS_PER_PAGE = 30
+
+
+def _normalize_class_filters(forced_classes: Optional[Sequence[str]], requested_class: str) -> tuple[list[str], str]:
+    """
+    Determine which card classes should be applied for filtering.
+
+    Returns a tuple of (class_filters_for_query, class_value_for_display).
+    """
+    normalized_forced = []
+    if forced_classes:
+        normalized_forced = [cls.strip() for cls in forced_classes if cls and cls.strip()]
+
+    if normalized_forced:
+        display_value = normalized_forced[0]
+        return normalized_forced, display_value
+
+    request_value = (requested_class or '').strip()
+    return ([request_value] if request_value else []), request_value
+
+
+def _apply_class_filter(query, class_filters: Sequence[str], column):
+    """Apply class filters to a SQLAlchemy query if any filters are provided."""
+    if class_filters:
+        if len(class_filters) == 1:
+            return query.filter(column == class_filters[0])
+        return query.filter(column.in_(class_filters))
+    return query
+
+
+def _build_cards_context(
+    *,
+    base_endpoint: str,
+    forced_classes: Optional[Sequence[str]] = None,
+    show_class_filter: bool = True,
+    view_title: str = "Card Catalog",
+    view_description: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Assemble shared context for card and accessory catalog views."""
+    query_text = request.args.get('q', '').strip()
+    set_filter = request.args.get('set', '').strip()
+    rarity_filter = request.args.get('rarity', '').strip()
+    foiling_filter = request.args.get('foiling', '').strip()
+
+    requested_class = request.args.get('card_class', '')
+    class_filters, display_class = _normalize_class_filters(forced_classes, requested_class)
+
+    # Price range filters
+    min_price = None
+    max_price = None
+    try:
+        min_price_str = request.args.get('min_price')
+        if min_price_str:
+            min_price = float(min_price_str)
+    except (ValueError, TypeError):
+        pass
+
+    try:
+        max_price_str = request.args.get('max_price')
+        if max_price_str:
+            max_price = float(max_price_str)
+    except (ValueError, TypeError):
+        pass
+
+    # Pagination
+    try:
+        page = int(request.args.get('page', 1))
+        if page < 1:
+            page = 1
+    except (ValueError, TypeError):
+        page = 1
+
+    per_page = DEFAULT_CARDS_PER_PAGE
+    sort_by = request.args.get('sort', 'name_asc')
+
+    class_filter_param: Optional[Sequence[str] | str]
+    if class_filters:
+        class_filter_param = class_filters if len(class_filters) > 1 else class_filters[0]
+    else:
+        class_filter_param = None
+
+    # Fetch admin cards
+    admin_cards = storage.search_cards(
+        query=query_text,
+        set_filter=set_filter,
+        rarity_filter=rarity_filter,
+        foiling_filter=foiling_filter,
+        card_class_filter=class_filter_param,
+        min_price=min_price,
+        max_price=max_price
+    )
+
+    # Fetch user inventory items (apply filters only when relevant)
+    user_cards = []
+    if any([query_text, set_filter, rarity_filter, foiling_filter, class_filters, min_price is not None, max_price is not None]):
+        user_items_query = InventoryItem.query.join(Card).filter(
+            InventoryItem.is_verified == True,
+            InventoryItem.quantity > 0,
+            InventoryItem.listed_for_sale == True
+        )
+
+        if query_text:
+            user_items_query = user_items_query.filter(Card.name.ilike(f'%{query_text}%'))
+        if set_filter:
+            user_items_query = user_items_query.filter(Card.set_name == set_filter)
+        if rarity_filter:
+            user_items_query = user_items_query.filter(Card.rarity == rarity_filter)
+        if foiling_filter:
+            user_items_query = user_items_query.filter(Card.foiling == foiling_filter)
+
+        user_items_query = _apply_class_filter(user_items_query, class_filters, Card.card_class)
+
+        user_inventory_items = user_items_query.all()
+
+        for item in user_inventory_items:
+            card_data = item.card.to_dict()
+            card_data.update({
+                'item_type': 'user',
+                'inventory_item_id': item.id,
+                'seller_info': {
+                    'type': 'user',
+                    'name': item.inventory.user.username,
+                    'user_id': item.inventory.user.id
+                },
+                'display_price': float(item.card.price) if item.card else 0,
+                'condition': item.condition,
+                'quantity': item.quantity,
+                'language': item.language or card_data.get('language') or 'English'
+            })
+            user_cards.append(card_data)
+
+    # Combine sources
+    combined_cards = []
+    for card in admin_cards:
+        card_data = card.copy()
+        card_data['item_type'] = 'admin'
+        card_data['seller_info'] = {'type': 'admin', 'name': 'Lotus TCG Store'}
+        card_data['display_price'] = card_data['price']
+        combined_cards.append(card_data)
+
+    combined_cards.extend(user_cards)
+
+    # Sorting
+    if sort_by == 'name_asc':
+        combined_cards.sort(key=lambda x: x.get('name', '').lower())
+    elif sort_by == 'name_desc':
+        combined_cards.sort(key=lambda x: x.get('name', '').lower(), reverse=True)
+    elif sort_by == 'price_asc':
+        combined_cards.sort(key=lambda x: float(x.get('display_price', 0)))
+    elif sort_by == 'price_desc':
+        combined_cards.sort(key=lambda x: float(x.get('display_price', 0)), reverse=True)
+
+    in_stock_cards = [card for card in combined_cards if card.get('quantity', 0) > 0]
+    out_of_stock_cards = [card for card in combined_cards if card.get('quantity', 0) == 0]
+    sorted_cards = in_stock_cards
+
+    total_cards = len(sorted_cards)
+    total_pages = (total_cards + per_page - 1) // per_page if total_cards else 0
+
+    if page > total_pages and total_pages > 0:
+        page = total_pages
+
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    page_cards = sorted_cards[start_idx:end_idx]
+
+    all_sets = storage.get_unique_sets()
+    all_rarities = storage.get_unique_rarities()
+    all_foilings = storage.get_unique_foilings()
+    all_classes = storage.get_unique_classes()
+
+    user_sets = db.session.query(Card.set_name.distinct()).join(InventoryItem).filter(
+        InventoryItem.is_verified == True,
+        InventoryItem.is_public == True
+    ).all()
+    user_rarities = db.session.query(Card.rarity.distinct()).join(InventoryItem).filter(
+        InventoryItem.is_verified == True,
+        InventoryItem.is_public == True
+    ).all()
+    user_foilings = db.session.query(Card.foiling.distinct()).join(InventoryItem).filter(
+        InventoryItem.is_verified == True,
+        InventoryItem.is_public == True
+    ).all()
+    user_classes = db.session.query(Card.card_class.distinct()).join(InventoryItem).filter(
+        InventoryItem.is_verified == True,
+        InventoryItem.is_public == True
+    ).all()
+
+    all_sets.extend([s[0] for s in user_sets if s[0] and s[0] not in all_sets])
+    all_rarities.extend([r[0] for r in user_rarities if r[0] and r[0] not in all_rarities])
+    all_foilings.extend([f[0] for f in user_foilings if f[0] and f[0] not in all_foilings])
+    all_classes.extend([(c[0] or 'General') for c in user_classes if (c[0] or 'General') not in all_classes])
+
+    has_prev = page > 1
+    has_next = page < total_pages
+    prev_page = page - 1 if has_prev else None
+    next_page = page + 1 if has_next else None
+
+    page_numbers = []
+    if total_pages <= 7:
+        page_numbers = list(range(1, total_pages + 1))
+    else:
+        if page <= 4:
+            page_numbers = [1, 2, 3, 4, 5, '...', total_pages]
+        elif page >= total_pages - 3:
+            page_numbers = [1, '...', total_pages - 4, total_pages - 3, total_pages - 2, total_pages - 1, total_pages]
+        else:
+            page_numbers = [1, '...', page - 1, page, page + 1, '...', total_pages]
+
+    start_display = ((page - 1) * per_page) + 1 if total_cards else 0
+    end_display = min(page * per_page, total_cards) if total_cards else 0
+
+    if class_filters and not show_class_filter:
+        # For accessory view ensure dropdown defaults to forced option
+        all_classes = [display_class]
+
+    return {
+        'cards': page_cards,
+        'in_stock_count': len(in_stock_cards),
+        'out_of_stock_count': len(out_of_stock_cards),
+        'all_sets': all_sets,
+        'all_rarities': all_rarities,
+        'all_foilings': all_foilings,
+        'all_classes': all_classes,
+        'current_filters': {
+            'q': query_text,
+            'set': set_filter,
+            'rarity': rarity_filter,
+            'foiling': foiling_filter,
+            'min_price': request.args.get('min_price', ''),
+            'max_price': request.args.get('max_price', ''),
+            'card_class': display_class if display_class else '',
+            'sort': sort_by
+        },
+        'page': page,
+        'per_page': per_page,
+        'total_cards': total_cards,
+        'total_pages': total_pages,
+        'has_prev': has_prev,
+        'has_next': has_next,
+        'prev_page': prev_page,
+        'next_page': next_page,
+        'page_numbers': page_numbers,
+        'start_display': start_display,
+        'end_display': end_display,
+        'browse_endpoint': base_endpoint,
+        'show_class_filter': show_class_filter,
+        'view_title': view_title,
+        'view_description': view_description or "",
+    }
 
 # Validation decorators and helper functions
 def validate_inventory_item_data(data):
@@ -352,222 +605,36 @@ def index():
     featured_cards = in_stock_cards[:6] if in_stock_cards else []
     return render_template('index.html', featured_cards=featured_cards, total_cards=len(cards))
 
-@app.route('/catalog')
-def catalog():
-    """Card catalog with search and filtering - supports both admin and user inventory"""
-    # Get search parameters
-    query = request.args.get('q', '').strip()
-    set_filter = request.args.get('set', '')
-    rarity_filter = request.args.get('rarity', '')
-    foiling_filter = request.args.get('foiling', '')
-    class_filter = request.args.get('card_class', '')
-
-    # Price range filters
-    min_price = None
-    max_price = None
-    try:
-        min_price_str = request.args.get('min_price')
-        if min_price_str:
-            min_price = float(min_price_str)
-    except (ValueError, TypeError):
-        pass
-
-    try:
-        max_price_str = request.args.get('max_price')
-        if max_price_str:
-            max_price = float(max_price_str)
-    except (ValueError, TypeError):
-        pass
-
-    # Get pagination parameters
-    try:
-        page = int(request.args.get('page', 1))
-        if page < 1:
-            page = 1
-    except (ValueError, TypeError):
-        page = 1
-
-    per_page = 30
-
-    # Get sort parameter
-    sort_by = request.args.get('sort', 'name_asc')
-
-    # Get admin cards
-    admin_cards = storage.search_cards(
-        query=query,
-        set_filter=set_filter,
-        rarity_filter=rarity_filter,
-        foiling_filter=foiling_filter,
-        card_class_filter=class_filter,
-        min_price=min_price,
-        max_price=max_price
+@app.route('/cards')
+def cards():
+    """Primary card listing with filtering and pagination."""
+    context = _build_cards_context(
+        base_endpoint='cards',
+        view_title="Card Catalog",
+        view_description="Discover the latest cards available from Lotus TCG and community sellers.",
+        show_class_filter=True,
     )
+    return render_template('cards.html', **context)
 
-    # Get user inventory items
-    user_inventory_items = []
-    if query or set_filter or rarity_filter or foiling_filter or class_filter or min_price or max_price:
-        # Apply filters to user inventory items
-        user_items_query = InventoryItem.query.join(Card).filter(
-            InventoryItem.is_verified == True,
-            InventoryItem.quantity > 0,
-            InventoryItem.listed_for_sale == True
-        )
 
-        if query:
-            user_items_query = user_items_query.filter(Card.name.ilike(f'%{query}%'))
-        if set_filter:
-            user_items_query = user_items_query.filter(Card.set_name == set_filter)
-        if rarity_filter:
-            user_items_query = user_items_query.filter(Card.rarity == rarity_filter)
-        if foiling_filter:
-            user_items_query = user_items_query.filter(Card.foiling == foiling_filter)
-        if class_filter:
-            user_items_query = user_items_query.filter(Card.card_class == class_filter)
-        # Price filtering removed - no longer using sale_price
+@app.route('/accessories')
+def accessories():
+    """Accessory-focused catalog using shared card browsing experience."""
+    context = _build_cards_context(
+        base_endpoint='accessories',
+        forced_classes=ACCESSORY_CARD_CLASSES,
+        show_class_filter=False,
+        view_title="Accessories",
+        view_description="Keep your deck tournament-ready with sleeves, dice, mats, and more.",
+    )
+    context['is_accessories'] = True
+    return render_template('cards.html', **context)
 
-        user_inventory_items = user_items_query.all()
 
-    # Convert user inventory items to display format
-    user_cards = []
-    for item in user_inventory_items:
-        card_data = item.card.to_dict()
-        card_data.update({
-            'item_type': 'user',
-            'inventory_item_id': item.id,
-            'seller_info': {
-                'type': 'user',
-                'name': item.inventory.user.username,
-                'user_id': item.inventory.user.id
-            },
-            'display_price': float(item.card.price) if item.card else 0,
-            'condition': item.condition,
-            'quantity': item.quantity,
-            'language': item.language or card_data.get('language') or 'English'
-        })
-        user_cards.append(card_data)
-
-    # Combine admin and user cards
-    all_cards = []
-    for card in admin_cards:
-        card_data = card.copy()
-        card_data['item_type'] = 'admin'
-        card_data['seller_info'] = {'type': 'admin', 'name': 'Lotus TCG Store'}
-        card_data['display_price'] = card_data['price']
-        all_cards.append(card_data)
-
-    all_cards.extend(user_cards)
-
-    # Apply sorting
-    if sort_by == 'name_asc':
-        all_cards.sort(key=lambda x: x.get('name', '').lower())
-    elif sort_by == 'name_desc':
-        all_cards.sort(key=lambda x: x.get('name', '').lower(), reverse=True)
-    elif sort_by == 'price_asc':
-        all_cards.sort(key=lambda x: float(x.get('display_price', 0)))
-    elif sort_by == 'price_desc':
-        all_cards.sort(key=lambda x: float(x.get('display_price', 0)), reverse=True)
-
-    # Separate in-stock and out-of-stock cards
-    in_stock_cards = [card for card in all_cards if card.get('quantity', 0) > 0]
-    out_of_stock_cards = [card for card in all_cards if card.get('quantity', 0) == 0]
-
-    # Hide out-of-stock items from the catalog listing
-    sorted_cards = in_stock_cards
-
-    # Calculate pagination
-    total_cards = len(sorted_cards)
-    total_pages = (total_cards + per_page - 1) // per_page  # Ceiling division
-
-    # Ensure page is within valid range
-    if page > total_pages and total_pages > 0:
-        page = total_pages
-
-    # Get cards for current page
-    start_idx = (page - 1) * per_page
-    end_idx = start_idx + per_page
-    page_cards = sorted_cards[start_idx:end_idx]
-
-    # Get filter options (combine from both sources)
-    all_sets = storage.get_unique_sets()
-    all_rarities = storage.get_unique_rarities()
-    all_foilings = storage.get_unique_foilings()
-    all_classes = storage.get_unique_classes()
-
-    # Add user inventory sets/rarities/foilings (only public items)
-    user_sets = db.session.query(Card.set_name.distinct()).join(InventoryItem).filter(
-        InventoryItem.is_verified == True,
-        InventoryItem.is_public == True
-    ).all()
-    user_rarities = db.session.query(Card.rarity.distinct()).join(InventoryItem).filter(
-        InventoryItem.is_verified == True,
-        InventoryItem.is_public == True
-    ).all()
-    user_foilings = db.session.query(Card.foiling.distinct()).join(InventoryItem).filter(
-        InventoryItem.is_verified == True,
-        InventoryItem.is_public == True
-    ).all()
-    user_classes = db.session.query(Card.card_class.distinct()).join(InventoryItem).filter(
-        InventoryItem.is_verified == True,
-        InventoryItem.is_public == True
-    ).all()
-
-    all_sets.extend([s[0] for s in user_sets if s[0] not in all_sets])
-    all_rarities.extend([r[0] for r in user_rarities if r[0] not in all_rarities])
-    all_foilings.extend([f[0] for f in user_foilings if f[0] not in all_foilings])
-    all_classes.extend([(c[0] or 'General') for c in user_classes if (c[0] or 'General') not in all_classes])
-
-    # Calculate pagination info
-    has_prev = page > 1
-    has_next = page < total_pages
-    prev_page = page - 1 if has_prev else None
-    next_page = page + 1 if has_next else None
-
-    # Generate page numbers for pagination control
-    page_numbers = []
-    if total_pages <= 7:
-        page_numbers = list(range(1, total_pages + 1))
-    else:
-        if page <= 4:
-            page_numbers = [1, 2, 3, 4, 5, '...', total_pages]
-        elif page >= total_pages - 3:
-            page_numbers = [1, '...', total_pages - 4, total_pages - 3, total_pages - 2, total_pages - 1, total_pages]
-        else:
-            page_numbers = [1, '...', page - 1, page, page + 1, '...', total_pages]
-
-    # Calculate display range for template
-    start_display = ((page - 1) * per_page) + 1
-    end_display = min(page * per_page, total_cards)
-
-    return render_template('catalog.html',
-                          cards=page_cards,
-                          in_stock_count=len(in_stock_cards),
-                          out_of_stock_count=len(out_of_stock_cards),
-                          all_sets=all_sets,
-                          all_rarities=all_rarities,
-                          all_foilings=all_foilings,
-                          all_classes=all_classes,
-                          current_filters={
-                              'q': query,
-                              'set': set_filter,
-                              'rarity': rarity_filter,
-                              'foiling': foiling_filter,
-                              'min_price': request.args.get('min_price', ''),
-                              'max_price': request.args.get('max_price', ''),
-                              'card_class': class_filter,
-                              'sort': sort_by
-                          },
-                          # Pagination data
-                          page=page,
-                          per_page=per_page,
-                          total_cards=total_cards,
-                          total_pages=total_pages,
-                          has_prev=has_prev,
-                          has_next=has_next,
-                          prev_page=prev_page,
-                          next_page=next_page,
-                          page_numbers=page_numbers,
-                          start_display=start_display,
-                          end_display=end_display)
+@app.route('/catalog')
+def catalog_redirect():
+    """Maintain backwards compatibility for legacy /catalog URLs."""
+    return redirect(url_for('cards'), code=301)
 
 @app.route('/card/<card_id>')
 def card_detail(card_id):
@@ -575,7 +642,7 @@ def card_detail(card_id):
     card = storage.get_card(card_id)
     if not card:
         flash('Card not found', 'error')
-        return redirect(url_for('catalog'))
+        return redirect(url_for('cards'))
     # Related cards from same set (admin catalog)
     try:
         set_name = card.get('set_name') if isinstance(card, dict) else getattr(card, 'set_name', None)
@@ -3400,55 +3467,110 @@ def delete_card_form(card_id):
 @admin_required
 def add_card_form():
     """Handle manual card addition - admin only"""
+    return _add_inventory_card_from_form(default_class='General', success_message_prefix='Card')
+
+
+def _add_inventory_card_from_form(default_class: str, success_message_prefix: str):
     try:
         from models import Card
-        
-        # Validate required fields
-        name = request.form.get('name', '').strip()
-        if not name:
-            flash('Card name is required', 'error')
-            return redirect(url_for('admin'))
-        
-        # Create new card
-        card = Card(
-            name=name,
-            set_name=request.form.get('set_name', 'Unknown'),
-            rarity=request.form.get('rarity', 'Common'),
-            condition=request.form.get('condition', 'Near Mint'),
-            language=request.form.get('language', 'English'),
-            description=request.form.get('description', ''),
-            image_url=request.form.get('image_url', ''),
-            foiling=request.form.get('foiling', 'NF'),
-            art_style=request.form.get('art_style', 'normal'),
-            card_class=((request.form.get('card_class') or 'General').strip() or 'General'),
-            owner='shop'
+        missing_name_message = f'{success_message_prefix} name is required'
+        card = _build_card_from_form(
+            request.form,
+            Card,
+            default_class=default_class,
+            missing_name_message=missing_name_message
         )
-        
-        # Handle numeric fields with validation
-        try:
-            price = request.form.get('price', '0')
-            card.price = float(price) if price else 0.0
-        except (ValueError, TypeError):
-            card.price = 0.0
-        
-        try:
-            quantity = request.form.get('quantity', '0')
-            card.quantity = int(quantity) if quantity else 0
-        except (ValueError, TypeError):
-            card.quantity = 0
-        
         db.session.add(card)
         db.session.commit()
-        
-        flash(f'Card "{card.name}" added successfully', 'success')
+
+        flash(f'{success_message_prefix} "{card.name}" added successfully', 'success')
         logger.debug(f"Added card: {card.name} (ID: {card.id})")
-        
+        return redirect(url_for('admin'))
+    except ValueError as validation_error:
+        flash(str(validation_error), 'error')
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error adding card: {e}")
         flash(f'Error adding card: {str(e)}', 'error')
-    
+
     return redirect(url_for('admin'))
+
+
+def _build_card_from_form(form_data, card_model, default_class: str, *, missing_name_message: str):
+    """Construct a card model instance from admin form data."""
+    name = form_data.get('name', '').strip()
+    if not name:
+        raise ValueError(missing_name_message)
+
+    card_class_value = (form_data.get('card_class') or default_class or '').strip() or default_class
+
+    card = card_model(
+        name=name,
+        set_name=form_data.get('set_name', 'Unknown'),
+        rarity=form_data.get('rarity', 'Common'),
+        condition=form_data.get('condition', 'Near Mint'),
+        language=form_data.get('language', 'English'),
+        description=form_data.get('description', ''),
+        image_url=form_data.get('image_url', ''),
+        foiling=form_data.get('foiling', 'NF'),
+        art_style=(form_data.get('art_style') or 'normal'),
+        card_class=card_class_value,
+        card_code=form_data.get('card_code', '').strip() or None,
+        owner='shop'
+    )
+
+    price_raw = form_data.get('price', '')
+    try:
+        card.price = float(price_raw) if price_raw else 0.0
+    except (ValueError, TypeError):
+        card.price = 0.0
+
+    quantity_raw = form_data.get('quantity', '')
+    try:
+        card.quantity = int(quantity_raw) if quantity_raw else 0
+    except (ValueError, TypeError):
+        card.quantity = 0
+
+    return card
+
+
+@app.route('/admin/add_accessory', methods=['POST'])
+@admin_required
+def add_accessory_form():
+    """Handle manual accessory addition - admin only."""
+    return _add_inventory_card_from_form(default_class='Accessory', success_message_prefix='Accessory')
+
+
+def _prepare_tracking_payload(data) -> Dict[str, Optional[str]]:
+    """Normalize tracking fields from incoming form data."""
+    def _clean(value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
+    tracking_number = _clean(data.get('tracking_number'))
+    carrier = _clean(data.get('tracking_carrier'))
+    url = _clean(data.get('tracking_url'))
+    if url and not url.lower().startswith(('http://', 'https://')):
+        url = f'https://{url}'
+    notes = _clean(data.get('tracking_notes'))
+
+    return {
+        'tracking_number': tracking_number,
+        'tracking_carrier': carrier,
+        'tracking_url': url,
+        'tracking_notes': notes,
+    }
+
+
+def _apply_tracking_details(order: Order, payload: Dict[str, Optional[str]]) -> Dict[str, Optional[str]]:
+    """Apply normalized tracking payload onto an order instance."""
+    order.tracking_number = payload.get('tracking_number')
+    order.tracking_carrier = payload.get('tracking_carrier')
+    order.tracking_url = payload.get('tracking_url')
+    order.tracking_notes = payload.get('tracking_notes')
+    return payload
 
 # REMOVED: Old cart helper functions for session-based cart system
 # These functions have been removed as they are no longer needed with the database-based cart system
@@ -4097,16 +4219,23 @@ def admin_ship_order(order_id):
     """Mark an order as shipped (for shipping method)."""
     order = Order.query.get_or_404(order_id)
 
-    if order.status not in ('pending', 'confirmed'):
-        flash('Only pending or confirmed orders can be marked as shipped', 'warning')
+    if order.status not in ('pending', 'confirmed', 'shipped'):
+        flash('Only pending, confirmed, or shipped orders can be updated with tracking info', 'warning')
         return redirect(url_for('admin_orders'))
 
     try:
+        payload = _prepare_tracking_payload(request.form)
+        _apply_tracking_details(order, payload)
         # For shipping method, mark shipped; for pickup/inventory we still allow shipped if desired.
         order.status = 'shipped'
+        if not order.shipped_at:
+            order.shipped_at = datetime.utcnow()
         order.updated_at = db.func.now()
         db.session.commit()
-        flash(f'Order {order_id} marked as shipped', 'success')
+        message = f'Order {order_id} marked as shipped'
+        if payload.get('tracking_number'):
+            message += f' (Tracking #{payload["tracking_number"]})'
+        flash(message, 'success')
     except Exception as e:
         db.session.rollback()
         flash(f'Error marking order shipped: {str(e)}', 'error')
