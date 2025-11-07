@@ -1,0 +1,529 @@
+{% extends "base.html" %}
+
+{% set accessories_mode = is_accessories|default(false) %}
+{% set item_name = 'Accessory' if accessories_mode else 'Card' %}
+{% set item_name_plural = 'Accessories' if accessories_mode else 'Cards' %}
+
+{% block title %}{{ view_title }} - The Lotus TCG{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <div class="row">
+        <div class="col-lg-3">
+            <!-- Search and Filters -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-filter me-2"></i>Search & Filters
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="GET" action="{{ url_for(browse_endpoint, page=1) }}">
+                        <!-- Search -->
+                        <div class="mb-3">
+                            <label for="q" class="form-label">{{ item_name }} Name</label>
+                            <input type="text" class="form-control" id="q" name="q" 
+                                   value="{{ current_filters.q }}" placeholder="Search {{ item_name_plural | lower }}...">
+                        </div>
+                        
+                        <!-- Set Filter -->
+                        <div class="mb-3">
+                            <label for="set" class="form-label">Set</label>
+                            <select class="form-select" id="set" name="set">
+                                <option value="">All Sets</option>
+                                {% for set_name in all_sets %}
+                                <option value="{{ set_name }}" 
+                                        {% if current_filters.set == set_name %}selected{% endif %}>
+                                    {{ set_name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <!-- Rarity Filter -->
+                        <div class="mb-3">
+                            <label for="rarity" class="form-label">Rarity</label>
+                            <select class="form-select" id="rarity" name="rarity">
+                                <option value="">All Rarities</option>
+                                {% for rarity in all_rarities %}
+                                <option value="{{ rarity }}"
+                                        {% if current_filters.rarity == rarity %}selected{% endif %}>
+                                    {{ rarity }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        {% if show_class_filter %}
+                        <!-- Class Filter -->
+                        <div class="mb-3">
+                            <label for="card_class" class="form-label">Class</label>
+                            <select class="form-select" id="card_class" name="card_class">
+                                <option value="">All Classes</option>
+                                {% for class_name in all_classes %}
+                                {% set display_class = class_name or 'General' %}
+                                <option value="{{ class_name }}"
+                                        {% if current_filters.card_class == class_name %}selected{% endif %}>
+                                    {{ display_class }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% elif current_filters.card_class %}
+                        <input type="hidden" name="card_class" value="{{ current_filters.card_class }}">
+                        {% endif %}
+
+                        <!-- Foiling Filter -->
+                        <div class="mb-3">
+                            <label for="foiling" class="form-label">Foiling</label>
+                            <select class="form-select" id="foiling" name="foiling">
+                                <option value="">All Foiling Types</option>
+                                {% for foiling in all_foilings %}
+                                <option value="{{ foiling }}"
+                                        {% if current_filters.foiling == foiling %}selected{% endif %}>
+                                    {% if foiling == 'NF' %}
+                                        Non Foil
+                                    {% elif foiling == 'RF' %}
+                                        Rainbow Foil
+                                    {% elif foiling == 'CF' %}
+                                        Cold Foil
+                                    {% else %}
+                                        {{ foiling }}
+                                    {% endif %}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <!-- Price Range -->
+                        <div class="mb-3">
+                            <label class="form-label">Price Range</label>
+                            <div class="row">
+                                <div class="col-6">
+                                    <input type="number" class="form-control" name="min_price" 
+                                           value="{{ current_filters.min_price }}" placeholder="Min" step="0.01" min="0">
+                                </div>
+                                <div class="col-6">
+                                    <input type="number" class="form-control" name="max_price" 
+                                           value="{{ current_filters.max_price }}" placeholder="Max" step="0.01" min="0">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-2"></i>Search
+                            </button>
+                            <a href="{{ url_for(browse_endpoint, page=1, sort='name_asc') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-2"></i>Clear Filters
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-9">
+            <!-- Results Header -->
+            <div class="d-lg-flex justify-content-between align-items-start mb-3">
+                <div class="mb-3 mb-lg-0">
+                    <h2 class="mb-1">{{ view_title }}</h2>
+                    {% if view_description %}
+                    <p class="text-muted mb-0 small">{{ view_description }}</p>
+                    {% endif %}
+                </div>
+                <div class="text-end">
+                    <span class="text-muted">
+                        {% if total_cards %}
+                            Showing {{ start_display }} - {{ end_display }} of {{ total_cards }} {{ item_name_plural | lower }}
+                            {% if total_pages > 1 %}
+                                (Page {{ page }} of {{ total_pages }})
+                            {% endif %}
+                        {% else %}
+                            {{ cards|length }} {{ item_name_plural | lower }} found
+                        {% endif %}
+                    </span>
+                    {% if in_stock_count is defined and out_of_stock_count is defined %}
+                    <br>
+                    <small class="text-success">{{ in_stock_count }} in stock</small>
+                    {% if out_of_stock_count > 0 %}
+                    <small class="text-muted"> • {{ out_of_stock_count }} out of stock</small>
+                    {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Sort Dropdown -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <form method="GET" action="{{ url_for(browse_endpoint, page=1) }}" class="d-inline">
+                        <input type="hidden" name="q" value="{{ current_filters.q }}">
+                        <input type="hidden" name="set" value="{{ current_filters.set }}">
+                        <input type="hidden" name="rarity" value="{{ current_filters.rarity }}">
+                        <input type="hidden" name="foiling" value="{{ current_filters.foiling }}">
+                        <input type="hidden" name="min_price" value="{{ current_filters.min_price }}">
+                        <input type="hidden" name="max_price" value="{{ current_filters.max_price }}">
+                        <input type="hidden" name="card_class" value="{{ current_filters.card_class }}">
+                        <div class="input-group">
+                            <label class="input-group-text" for="sort">
+                                <i class="fas fa-sort me-1"></i>Sort by
+                            </label>
+                            <select class="form-select" id="sort" name="sort" onchange="this.form.submit()">
+                                <option value="name_asc" {% if current_filters.sort == 'name_asc' %}selected{% endif %}>Name (A-Z)</option>
+                                <option value="name_desc" {% if current_filters.sort == 'name_desc' %}selected{% endif %}>Name (Z-A)</option>
+                                <option value="price_asc" {% if current_filters.sort == 'price_asc' %}selected{% endif %}>Price (Low to High)</option>
+                                <option value="price_desc" {% if current_filters.sort == 'price_desc' %}selected{% endif %}>Price (High to Low)</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Active Filters -->
+            {% set active_filters = [] %}
+            {% if current_filters.q %}{% set _ = active_filters.append(('Search', current_filters.q)) %}{% endif %}
+            {% if current_filters.set %}{% set _ = active_filters.append(('Set', current_filters.set)) %}{% endif %}
+            {% if current_filters.rarity %}{% set _ = active_filters.append(('Rarity', current_filters.rarity)) %}{% endif %}
+            {% if current_filters.foiling %}{% set _ = active_filters.append(('Foiling', current_filters.foiling)) %}{% endif %}
+            {% if current_filters.min_price %}{% set _ = active_filters.append(('Min Price', 'VND' + current_filters.min_price)) %}{% endif %}
+            {% if current_filters.max_price %}{% set _ = active_filters.append(('Max Price', 'VND' + current_filters.max_price)) %}{% endif %}
+            
+            {% if active_filters %}
+            <div class="mb-3">
+                <small class="text-muted">Active filters:</small>
+                {% for filter_name, filter_value in active_filters %}
+                <span class="badge bg-info me-1">{{ filter_name }}: {{ filter_value }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            <!-- Cards Grid -->
+            {% if cards %}
+            <div class="row">
+                {% set in_stock_shown = false %}
+                {% for card in cards %}
+                {% if card.quantity == 0 and in_stock_shown %}
+                <!-- Separator for out-of-stock cards -->
+                <div class="col-12">
+                    <hr class="my-4">
+                    <div class="text-center mb-4">
+                        <h5 class="text-muted">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Out of Stock Items
+                        </h5>
+                        <p class="text-muted small">These {{ item_name_plural | lower }} are currently unavailable but may be restocked soon.</p>
+                    </div>
+                </div>
+                {% set in_stock_shown = false %}
+                {% endif %}
+                {% if card.quantity > 0 %}
+                {% set in_stock_shown = true %}
+                {% endif %}
+                <div class="col-xl-4 col-lg-6 col-md-6 mb-4">
+                    <div class="card h-100{% if card.quantity == 0 %} border-warning{% endif %}">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <strong class="text-truncate me-2">{{ card.name }}</strong>
+                            <div class="d-flex gap-1">
+                                {% set rarity_l = (card.rarity or '') | lower %}
+                                {% if rarity_l == 'majestic' %}
+                                    <span class="badge bg-danger">{{ card.rarity }}</span>
+                                {% elif rarity_l == 'legendary' %}
+                                    <span class="badge bg-warning text-dark">{{ card.rarity }}</span>
+                                {% elif rarity_l == 'promo' %}
+                                    <span class="badge bg-success">{{ card.rarity }}</span>
+                                {% elif rarity_l == 'marvel' %}
+                                    <span class="badge" style="background-color: purple; color: #fff;">{{ card.rarity }}</span>
+                                {% else %}
+                                {% set rarity_l = (card.rarity or '') | lower %}
+                                {% if rarity_l == 'majestic' %}
+                                    <span class="badge bg-danger">{{ card.rarity }}</span>
+                                {% elif rarity_l == 'legendary' %}
+                                    <span class="badge bg-warning text-dark">{{ card.rarity }}</span>
+                                {% elif rarity_l == 'promo' %}
+                                    <span class="badge bg-success">{{ card.rarity }}</span>
+                                {% elif rarity_l == 'marvel' %}
+                                    <span class="badge" style="background-color: purple; color: #fff;">{{ card.rarity }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ card.rarity }}</span>
+                                {% endif %}
+                                {% endif %}
+                                {% if card.quantity == 0 %}
+                                <span class="badge bg-warning text-dark">Out of Stock</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        {# Seller Information removed per request #}
+
+                        <div class="card-body">
+                            <div class="text-center mb-3">
+                                {% if card.image_url %}
+                                <img src="{{ card.image_url }}" alt="{{ card.name }}" 
+                                     class="img-fluid rounded" style="height: 200px; width: auto; max-width: 100%; object-fit: contain;"
+                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                                <div style="display: none;">
+                                    <i class="fas fa-image display-4 text-muted"></i>
+                                    <p class="text-muted small mt-1">Image Not Available</p>
+                                </div>
+                                {% else %}
+                                <i class="fas fa-image display-4 text-muted"></i>
+                                <p class="text-muted small mt-1">No Image</p>
+                                {% endif %}
+                            </div>
+                            <div class="small">
+                                <p class="mb-1"><strong>Set:</strong> {{ card.set_name }}</p>
+                                {% if card.card_code %}
+                                <p class="mb-1"><strong>Code:</strong> {{ card.card_code }}</p>
+                                {% endif %}
+                                <p class="mb-1"><strong>Condition:</strong> {{ card.condition }}</p>
+                                <p class="mb-1"><strong>Language:</strong> {{ card.language or 'English' }}</p>
+                                <p class="mb-1"><strong>Foiling:</strong>
+                                    {% if card.foiling == 'NF' %}
+                                        <span class="badge bg-light text-dark">Non Foil</span>
+                                    {% elif card.foiling == 'RF' %}
+                                        <span class="badge bg-info">Rainbow Foil</span>
+                                    {% elif card.foiling == 'CF' %}
+                                        <span class="badge bg-primary">Cold Foil</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ card.foiling }}</span>
+                                    {% endif %}
+                                </p>
+                                <p class="mb-1"><strong>Art Style:</strong>
+                                    {% if card.art_style == 'Normal' %}
+                                        <span class="badge bg-light text-dark">Normal</span>
+                                    {% elif card.art_style == 'EA' %}
+                                        <span class="badge bg-success">Extended Art</span>
+                                    {% elif card.art_style == 'WB' %}
+                                        <span class="badge bg-warning text-dark">White Border</span>
+                                    {% elif card.art_style == 'ALT' %}
+                                        <span class="badge bg-danger">Alternate Art</span>
+                                    {% elif card.art_style == 'GF' %}
+                                        <span class="badge bg-warning">Golden</span>
+                                    {% elif card.art_style == 'Marvel' %}
+                                        <span class="badge bg-warning">Marvel</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ card.art_style }}</span>
+                                    {% endif %}
+                                </p>
+                                <p class="mb-1"><strong>Price:</strong> <span class="text-success fw-bold">{{ "{:,.0f}".format(card.get('display_price', card.price)) }} VND</span></p>
+                                <p class="mb-2"><strong>Available:</strong>
+                                    {% if card.quantity > 0 %}
+                                        <span class="text-success">{{ card.quantity }} copies</span>
+                                    {% else %}
+                                        <span class="text-danger">Out of Stock</span>
+                                    {% endif %}
+                                </p>
+                                {% if card.description %}
+                                <p class="text-muted">{{ card.description[:100] }}{% if card.description|length > 100 %}...{% endif %}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            <div class="d-flex gap-2">
+                                <a href="{{ url_for('card_detail', card_id=card.id) }}" class="btn btn-outline-primary btn-sm flex-fill">
+                                    <i class="fas fa-eye me-1"></i>Details
+                                </a>
+                                {% if card.quantity > 0 %}
+                                <form method="POST" action="/cart/add" class="add-to-cart-form flex-fill">
+                                    {% if card.get('item_type') == 'user' %}
+                                        <input type="hidden" name="item_type" value="user">
+                                        <input type="hidden" name="inventory_item_id" value="{{ card.inventory_item_id }}">
+                                    {% else %}
+                                        <input type="hidden" name="item_type" value="admin">
+                                        <input type="hidden" name="card_id" value="{{ card.id }}">
+                                    {% endif %}
+                                    <input type="hidden" name="quantity" value="1">
+                                    <button type="submit" class="btn btn-success btn-sm w-100">
+                                        <i class="fas fa-cart-plus me-1"></i>Add to Cart
+                                    </button>
+                                </form>
+                                {% else %}
+                                <button class="btn btn-secondary btn-sm flex-fill" disabled>
+                                    <i class="fas fa-times me-1"></i>Out of Stock
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Pagination Controls -->
+            {% if total_pages > 1 %}
+            <nav aria-label="{{ view_title }} pagination" class="mt-4">
+                <ul class="pagination justify-content-center">
+                    <!-- Previous Button -->
+                    {% if has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for(browse_endpoint, page=prev_page, q=current_filters.q, set=current_filters.set, rarity=current_filters.rarity, foiling=current_filters.foiling, min_price=current_filters.min_price, max_price=current_filters.max_price, sort=current_filters.sort) }}" aria-label="Previous">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">&laquo;</span>
+                    </li>
+                    {% endif %}
+
+                    <!-- Page Numbers -->
+                    {% for page_num in page_numbers %}
+                    {% if page_num == '...' %}
+                    <li class="page-item disabled">
+                        <span class="page-link">...</span>
+                    </li>
+                    {% elif page_num == page %}
+                    <li class="page-item active">
+                        <span class="page-link">{{ page_num }}</span>
+                    </li>
+                    {% else %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for(browse_endpoint, page=page_num, q=current_filters.q, set=current_filters.set, rarity=current_filters.rarity, foiling=current_filters.foiling, min_price=current_filters.min_price, max_price=current_filters.max_price, sort=current_filters.sort) }}">{{ page_num }}</a>
+                    </li>
+                    {% endif %}
+                    {% endfor %}
+
+                    <!-- Next Button -->
+                    {% if has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for(browse_endpoint, page=next_page, q=current_filters.q, set=current_filters.set, rarity=current_filters.rarity, foiling=current_filters.foiling, min_price=current_filters.min_price, max_price=current_filters.max_price, sort=current_filters.sort) }}" aria-label="Next">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">&raquo;</span>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+
+            <!-- Pagination Info -->
+            <div class="text-center mt-2">
+                <small class="text-muted">
+                    Page {{ page }} of {{ total_pages }} • {{ per_page }} items per page
+                </small>
+            </div>
+            {% endif %}
+
+            {% else %}
+            <div class="text-center py-5">
+                <i class="fas fa-search display-1 text-muted mb-4"></i>
+                <h4>No {{ item_name_plural }} Found</h4>
+                <p class="text-muted">Try adjusting your search criteria or browse all available {{ item_name_plural | lower }}.</p>
+                <a href="{{ url_for(browse_endpoint, page=1, sort='name_asc') }}" class="btn btn-outline-primary">
+                    <i class="fas fa-list me-2"></i>Show All {{ item_name_plural }}
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="flash-messages">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-submit form on filter change (optional enhancement)
+document.addEventListener('DOMContentLoaded', function() {
+    const selects = document.querySelectorAll('#set, #rarity');
+    selects.forEach(select => {
+        select.addEventListener('change', function() {
+            // Uncomment to enable auto-submit on filter change
+            // this.form.submit();
+        });
+    });
+
+    document.querySelectorAll('.add-to-cart-form').forEach(function(form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            // Get form data based on item type
+            const formData = new FormData(form);
+            const requestData = {};
+
+            for (let [key, value] of formData.entries()) {
+                requestData[key] = value;
+            }
+
+            fetch('/cart/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify(requestData)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.ok) {
+                    // Update cart count if element exists
+                    const cartCount = document.getElementById('cart-count');
+                    if (cartCount) {
+                        cartCount.textContent = data.cart_qty;
+                    }
+                }
+
+                // Display flash messages
+                if (data.flashed_messages && data.flashed_messages.length > 0) {
+                    const flashContainer = document.querySelector('.flash-messages');
+                    if (flashContainer) {
+                        data.flashed_messages.forEach(flash => {
+                            const alertDiv = document.createElement('div');
+                            alertDiv.className = `alert alert-${flash.category} alert-dismissible fade show`;
+                            alertDiv.innerHTML = `
+                                ${flash.message}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            `;
+                            flashContainer.appendChild(alertDiv);
+
+                            // Auto-remove after 3 seconds
+                            setTimeout(() => {
+                                alertDiv.remove();
+                            }, 3000);
+                        });
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                // Display error using flash message system
+                const flashContainer = document.querySelector('.flash-messages');
+                if (flashContainer) {
+                    const alertDiv = document.createElement('div');
+                    alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+                    alertDiv.innerHTML = `
+                        Error adding item to cart
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    `;
+                    flashContainer.appendChild(alertDiv);
+
+                    // Auto-remove after 3 seconds
+                    setTimeout(() => {
+                        alertDiv.remove();
+                    }, 3000);
+                }
+            });
+        });
+    });
+});
+</script>
+{% endblock %}
+
