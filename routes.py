@@ -904,6 +904,7 @@ def checkout():
 
             # Create order with final total (including coupon and credit discounts)
             logger.info("Creating order...")
+            logger.info(f"Order totals - items_total: {total_amount}, discount: {discount_amount}, final_total: {final_total}")
             # Be resilient if DB hasn't been migrated yet (no 'email' / 'order_number' / 'user_id' columns)
             try:
                 from sqlalchemy import inspect as _sa_inspect
@@ -931,6 +932,10 @@ def checkout():
                 shipping_province=shipping_province,
                 shipping_postal_code=shipping_postal_code,
                 shipping_country=shipping_country,
+                coupon_id=applied_coupon.id if applied_coupon else None,
+                coupon_code=applied_coupon.code if applied_coupon else None,
+                discount_amount=float(discount_amount or 0.0),
+                discounted_total=float(final_total) if applied_coupon else None,
             )
             # Attach user_id if present and user authenticated
             if has_user_id_col and current_user.is_authenticated:
@@ -938,14 +943,7 @@ def checkout():
                     order_kwargs['user_id'] = int(current_user.id)
                 except Exception:
                     pass
-            # Ensure discount_amount is never NULL
-            try:
-                order_kwargs['discount_amount'] = float(discount_amount or 0.0)
-            except Exception:
-                order_kwargs['discount_amount'] = 0.0
-            # Optionally set discounted_total when a coupon is applied
-            if 'applied_coupon' in locals() and applied_coupon:
-                order_kwargs['discounted_total'] = float(final_total)
+
             if has_email_col:
                 # Ensure orders are linked to the logged-in user for My Orders listing
                 acct_email = None
