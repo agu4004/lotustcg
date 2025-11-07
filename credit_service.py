@@ -282,12 +282,14 @@ def _lock_credit_items_for_user(user_id: int) -> List[InventoryItem]:
     items = (
         db.session.query(InventoryItem)
         .join(Card, Card.id == InventoryItem.card_id)
-        .options(joinedload(InventoryItem.card))
         .filter(InventoryItem.inventory_id == inv.id, InventoryItem.quantity > 0, Card.set_name == 'CREDIT')
         .order_by(Card.price.desc(), InventoryItem.id.asc())
         .with_for_update()
         .all()
     )
+    # Manually load cards for the items (since joinedload conflicts with FOR UPDATE)
+    for item in items:
+        _ = item.card  # Trigger lazy load
     return items
 
 
