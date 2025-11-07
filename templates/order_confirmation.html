@@ -167,17 +167,17 @@
                                 </tr>
                                 {% endif %}
                                 {% if order.discount_amount and order.discount_amount > 0 %}
-                                {% set after_coupon = items_subtotal - order.discount_amount %}
-                                {% set credits_used = after_coupon - order.total_amount %}
+                                {% set after_coupon = items_subtotal - (order.discount_amount | float) %}
+                                {% set credits_used = after_coupon - (order.total_amount | float) %}
                                 {% if credits_used > 0 %}
                                 <tr class="table-info">
                                     <th colspan="3" class="text-end">Store Credits Applied:</th>
                                     <th>-{{ "{:,.0f}".format(credits_used) }} VND</th>
                                 </tr>
                                 {% endif %}
-                                {% elif order.total_amount < items_subtotal %}
+                                {% elif (order.total_amount | float) < items_subtotal %}
                                 {# No coupon, but total is less than subtotal - must be credits only #}
-                                {% set credits_used = items_subtotal - order.total_amount %}
+                                {% set credits_used = items_subtotal - (order.total_amount | float) %}
                                 <tr class="table-info">
                                     <th colspan="3" class="text-end">Store Credits Applied:</th>
                                     <th>-{{ "{:,.0f}".format(credits_used) }} VND</th>
